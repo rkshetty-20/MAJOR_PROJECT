@@ -17,7 +17,15 @@ from app.models import (
     SessionStatus,
 )
 from app.routers.scenarios import seed_scenarios
-from app.services.rule_engine import evaluate_rules
+from app.services.rule_engine import (
+    BEHAVIORAL_DEFAULTS,
+    _establishes_baseline,
+    _is_failure,
+    _is_success,
+    _normalize_dt,
+    _rule_config,
+    evaluate_rules,
+)
 from app.database import Base, engine
 
 Base.metadata.create_all(bind=engine)
@@ -492,8 +500,14 @@ def test_brute_force_and_sustained_attack_rules():
         db.commit()
         
         detections = evaluate_rules(session_id_1, db)
-        assert len(detections) == 1
-        assert detections[0].label == "sustained_attack_no_compromise"
+        labels = {d.label for d in detections}
+        # 5 failures now satisfy BOTH the sustained-attack rule and the
+        # repeated-failed-login rule from the same evidence. The previous
+        # single-label expectation only held because rule 8 was gated on the
+        # generator's `scenario` column, i.e. on ground truth leaking into the
+        # detector. Corroborating labels are the intended behaviour and are what
+        # the risk-fusion multi-signal term is designed to reward.
+        assert labels == {"sustained_attack_no_compromise", "multiple_failed_logins_detected"}, labels
         cleanup()
 
         # 4. Failed attempts (>=3) followed by a successful login -> brute_force
@@ -631,14 +645,16 @@ def test_combined_multi_signal_detection():
         db.add_all(events_to_create)
         db.commit()
         
-        # Verify 3 distinct rules evaluate successfully from the raw data
+        # Verify the distinct rules evaluate successfully from the raw data
         detections = evaluate_rules(session_id=session_id, db=db)
-        assert len(detections) == 3, f"Expected 3 detections, got {len(detections)}"
-        
         labels = {d.label for d in detections}
         assert "brute_force_detected" in labels
         assert "new_device_detected" in labels
         assert "anomalous_login_time_detected" in labels
+        # The 5-failure burst in this scenario also legitimately corroborates the
+        # repeated-failed-login rule (behaviour-based, no scenario-name gate).
+        assert "multiple_failed_logins_detected" in labels
+        assert len(detections) == 4, f"Expected 4 detections, got {len(detections)}"
         
         # Compute risk score
         risk_row = compute_risk_score(session_id=session_id, db=db)
@@ -649,7 +665,10 @@ def test_combined_multi_signal_detection():
         # Verify contributing factors
         factors = json.loads(risk_row.contributing_factors)
         assert factors["multi_signal_bonus"] == 30, f"Expected 30 bonus, got {factors['multi_signal_bonus']}"
-        assert set(factors["triggered_rules"]) == {"brute_force_detected", "new_device_detected", "anomalous_login_time_detected"}
+        assert set(factors["triggered_rules"]) == {
+            "brute_force_detected", "new_device_detected",
+            "anomalous_login_time_detected", "multiple_failed_logins_detected",
+        }
         
         print("Combined multi signal rule evaluation passed.")
     except Exception as e:
@@ -907,13 +926,399 @@ def test_suspicious_login_rule_detection():
             db.commit()
         db.close()
 
+def _new_session(db, scenario, student_id):
+    sess = SessionModel(
+        student_id=student_id,
+        scenario_id=scenario.id,
+        status=SessionStatus.RUNNING,
+        started_at=datetime.now(timezone.utc),
+    )
+    db.add(sess)
+    db.commit()
+    db.refresh(sess)
+    return sess
+
+
+def test_multiple_failed_logins_rule_detection():
+    """Rule 8 fires on burst behaviour, never on the generator's scenario name."""
+    db = SessionLocal()
+    session_ids = []
+    try:
+        seed_scenarios(db)
+        scenario = db.query(Scenario).first()
+        now = datetime.now(timezone.utc)
+
+        def run(events, offsets, student, src, tgt, spacing=2):
+            sess = _new_session(db, scenario, student)
+            session_ids.append(sess.id)
+            db.add_all([
+                SecurityEvent(
+                    session_id=sess.id, scenario=events["scenario"],
+                    event_type="failed_login",
+                    timestamp=now - timedelta(seconds=offsets * spacing),
+                    source=src, target=tgt,
+                )
+                for offsets in range(events["count"])
+            ])
+            db.commit()
+            dets = evaluate_rules(sess.id, db)
+            return {d.label for d in dets}
+
+        # 1. Exactly at the documented velocity threshold -> detected
+        labels = run({"count": 5, "scenario": "multiple_failed_logins"}, 5, "mfl_at_threshold", "198.51.100.12", "finance_admin")
+        assert "multiple_failed_logins_detected" in labels, labels
+
+        # 2. Below threshold -> not detected (sustained also needs 4)
+        labels = run({"count": 2, "scenario": "multiple_failed_logins"}, 2, "mfl_below", "198.51.100.13", "finance_admin_b")
+        assert "multiple_failed_logins_detected" not in labels, labels
+
+        # 3. ANTI-CHEAT: identical burst but labelled as a benign scenario.
+        #    Behaviour must win over the label.
+        labels = run({"count": 5, "scenario": "normal_login"}, 5, "mfl_anticheat_disguised", "198.51.100.14", "finance_admin_c")
+        assert "multiple_failed_logins_detected" in labels, (
+            f"Scenario label must not suppress a real burst, got {labels}"
+        )
+
+        # 4. Label alone cannot create a detection (no failure telemetry at all)
+        sess = _new_session(db, scenario, "mfl_label_only")
+        session_ids.append(sess.id)
+        db.add(SecurityEvent(
+            session_id=sess.id, scenario="multiple_failed_logins",
+            event_type="successful_login", timestamp=now,
+            source="198.51.100.99", target="nobody",
+        ))
+        db.commit()
+        assert evaluate_rules(sess.id, db) == [], "ground-truth label alone triggered a detection"
+
+        # 5. Window boundary: 5 failures spread beyond the window -> no MFL
+        sess = _new_session(db, scenario, "mfl_outside_window")
+        session_ids.append(sess.id)
+        db.add_all([
+            SecurityEvent(
+                session_id=sess.id, scenario="multiple_failed_logins",
+                event_type="failed_login",
+                timestamp=now - timedelta(seconds=100 * i),
+                source="198.51.100.20", target="slow_target",
+            )
+            for i in range(5)
+        ])
+        db.commit()
+        labels = {d.label for d in evaluate_rules(sess.id, db)}
+        assert "multiple_failed_logins_detected" not in labels, (
+            f"Spread-out failures must not meet the velocity window, got {labels}"
+        )
+
+        # 6. Duplicate ingestion is idempotent
+        sess = _new_session(db, scenario, "mfl_duplicate")
+        session_ids.append(sess.id)
+        rows = [
+            SecurityEvent(
+                session_id=sess.id, scenario="multiple_failed_logins",
+                event_type="failed_login", timestamp=now - timedelta(seconds=2 * i),
+                source="198.51.100.30", target="dup_target",
+            )
+            for i in range(5)
+        ]
+        db.add_all(rows)
+        db.commit()
+        first = {d.label for d in evaluate_rules(sess.id, db)}
+        second = evaluate_rules(sess.id, db)
+        assert "multiple_failed_logins_detected" in first
+        assert second == [], f"Re-evaluation must not duplicate detections, got {second}"
+
+        print("Multiple failed logins rule evaluation passed.")
+    finally:
+        for sid in session_ids:
+            db.query(Detection).filter(Detection.session_id == sid).delete()
+            db.query(SecurityEvent).filter(SecurityEvent.session_id == sid).delete()
+            db.query(SessionModel).filter(SessionModel.id == sid).delete()
+        db.commit()
+        db.close()
+
+
+def test_ground_truth_fields_never_reach_behavioural_decisions():
+    """Identical behaviour with opposite labels must yield identical verdicts."""
+    db = SessionLocal()
+    session_ids = []
+    try:
+        seed_scenarios(db)
+        scenario = db.query(Scenario).first()
+        now = datetime.now(timezone.utc)
+
+        def deviating_login(label_scenario, label_status):
+            sess = _new_session(db, scenario, f"leak_{label_scenario}_{label_status}")
+            session_ids.append(sess.id)
+            db.add_all([
+                SecurityEvent(
+                    session_id=sess.id, scenario=label_scenario,
+                    event_type="known_device_login", detection_status=label_status,
+                    timestamp=now - timedelta(days=1), source="192.0.2.7",
+                    target="acct_baseline", device="laptop-known",
+                    location="Bengaluru",
+                    payload_json=json.dumps({"device_id": "dev-known-1"}),
+                ),
+                SecurityEvent(
+                    session_id=sess.id, scenario=label_scenario,
+                    event_type="login_attempt", detection_status=label_status,
+                    timestamp=now, source="198.51.100.44",
+                    target="acct_baseline", device="laptop-unknown",
+                    location="Reykjavik",
+                    payload_json=json.dumps({"device_id": "dev-new-77"}),
+                ),
+            ])
+            db.commit()
+            return sess.id
+
+        # Same behaviour, contradictory generator labels -> same verdict.
+        a = deviating_login("suspicious_login", "Detected")
+        b = deviating_login("normal_login", "Clean")
+        labels_a = {d.label for d in evaluate_rules(a, db)}
+        labels_b = {d.label for d in evaluate_rules(b, db)}
+        assert "suspicious_login_detected" in labels_a
+        assert labels_a == labels_b, (
+            f"Verdict depends on generator metadata: {labels_a} vs {labels_b}"
+        )
+
+        # A benign history labelled as an attack must not be detected.
+        sess = _new_session(db, scenario, "benign_labelled_as_attack")
+        session_ids.append(sess.id)
+        db.add_all([
+            SecurityEvent(
+                session_id=sess.id, scenario="brute_force", detection_status="Detected",
+                event_type="known_device_login", timestamp=now - timedelta(hours=2),
+                source="192.0.2.9", target="acct_calm", device="ipad",
+                location="Bengaluru", payload_json=json.dumps({"device_id": "d1"}),
+            ),
+            SecurityEvent(
+                session_id=sess.id, scenario="phishing_url", detection_status="Detected",
+                event_type="successful_login", timestamp=now - timedelta(hours=1),
+                source="192.0.2.9", target="acct_calm", device="ipad",
+                location="Bengaluru", payload_json=json.dumps({"device_id": "d1"}),
+            ),
+        ])
+        db.commit()
+        assert evaluate_rules(sess.id, db) == [], (
+            "Attack labels on benign behaviour must not fabricate a detection"
+        )
+        print("Ground-truth leakage guard passed.")
+    finally:
+        for sid in session_ids:
+            db.query(Detection).filter(Detection.session_id == sid).delete()
+            db.query(SecurityEvent).filter(SecurityEvent.session_id == sid).delete()
+            db.query(SessionModel).filter(SessionModel.id == sid).delete()
+        db.commit()
+        db.close()
+
+
+def test_rule_engine_robustness_edge_cases():
+    """Out-of-order arrival, duplicates, missing fields, conflicting signals.
+
+    A fixed clock is used instead of ``datetime.now()`` so the anomalous-login-
+    time rule cannot make these assertions depend on the wall clock of the CI
+    runner.
+    """
+    db = SessionLocal()
+    session_ids = []
+    extra_scenario_ids = []
+    try:
+        seed_scenarios(db)
+        scenario = db.query(Scenario).first()
+        now = datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)  # inside 07-22
+
+        # 1. Shuffled ingestion order must not change the verdict.
+        base = [
+            ("failed_login", 0), ("failed_login", 2), ("failed_login", 4),
+            ("failed_login", 6), ("failed_login", 8), ("successful_login", 10),
+        ]
+        results = {}
+        for name, order in [("ordered", list(range(len(base)))), ("shuffled", [3, 0, 5, 1, 4, 2])]:
+            sess = _new_session(db, scenario, f"order_{name}")
+            session_ids.append(sess.id)
+            for idx in order:
+                et, offset = base[idx]
+                db.add(SecurityEvent(
+                    session_id=sess.id, scenario="brute_force", event_type=et,
+                    timestamp=now + timedelta(seconds=offset),
+                    source="198.51.100.50", target="ordering_test",
+                ))
+            db.commit()
+            results[name] = {d.label for d in evaluate_rules(sess.id, db)}
+        assert results["ordered"] == results["shuffled"], results
+        assert "brute_force_detected" in results["ordered"], results
+
+        # 2. Duplicate rows must not change or multiply the verdict.
+        #    Session A holds five distinct failed authentications; session B
+        #    holds the same five plus a byte-identical re-delivery of each. A
+        #    re-delivered row is one observation, not two, so both must yield the
+        #    same verdict and B must report the collapse.
+        burst = [dict(event_type="failed_login", timestamp=now + timedelta(seconds=2 * i),
+                      source="198.51.100.51", target="dup_order") for i in range(5)]
+
+        sess_a = _new_session(db, scenario, "duplicates_clean")
+        session_ids.append(sess_a.id)
+        db.add_all([SecurityEvent(session_id=sess_a.id, scenario="brute_force", **kw) for kw in burst])
+        db.commit()
+        evaluate_rules(sess_a.id, db)
+        verdict_a = {(d.label, d.explanation) for d in
+                     db.query(Detection).filter(Detection.session_id == sess_a.id).all()}
+        assert len(verdict_a) == 2, verdict_a
+
+        sess_b = _new_session(db, scenario, "duplicates_replayed")
+        session_ids.append(sess_b.id)
+        db.add_all([SecurityEvent(session_id=sess_b.id, scenario="brute_force", **kw) for kw in burst])
+        db.add_all([SecurityEvent(session_id=sess_b.id, scenario="brute_force", **kw) for kw in burst])
+        db.commit()
+        evaluate_rules(sess_b.id, db)
+        rows_b = db.query(Detection).filter(Detection.session_id == sess_b.id).all()
+        verdict_b = {(d.label, d.explanation) for d in rows_b}
+        assert verdict_a == verdict_b, (verdict_a, verdict_b)
+        assert len(rows_b) == len({d.label for d in rows_b}), "duplicate Detection rows"
+        for d in rows_b:
+            assert json.loads(d.features)["duplicate_events_collapsed"] == 5, d.label
+        assert evaluate_rules(sess_b.id, db) == [], "re-evaluation must be idempotent"
+
+        # 3. Missing / malformed fields must not crash or invent detections.
+        sess = _new_session(db, scenario, "missing_fields")
+        session_ids.append(sess.id)
+        db.add_all([
+            SecurityEvent(session_id=sess.id, scenario="impossible_travel",
+                          event_type="login_attempt", timestamp=now,
+                          source="", target="", device=None, location=None,
+                          payload_json=None, risk_level=None),
+            SecurityEvent(session_id=sess.id, scenario="impossible_travel",
+                          event_type="login_attempt", timestamp=now + timedelta(seconds=30),
+                          source="198.51.100.60", target="geo_test", device="d",
+                          location="Nowhere", payload_json="{not json"),
+        ])
+        db.commit()
+        dets = evaluate_rules(sess.id, db)  # must not raise
+        assert dets == [], f"Incomplete telemetry invented detections: {[d.label for d in dets]}"
+
+        # Helper guards must tolerate absent values directly.
+        assert _is_failure(None) is False and _is_success(None) is False
+        assert _establishes_baseline(None) is False
+        assert _normalize_dt(None) == datetime(1970, 1, 1, tzinfo=timezone.utc)
+        assert _normalize_dt(datetime(2026, 5, 4, 12, 0)) > _normalize_dt(None)
+        json.dumps(_rule_config(None))  # resolved config must stay persistable
+
+        # 4. Conflicting signals for one account are all reported, not merged.
+        sess = _new_session(db, scenario, "conflicting")
+        session_ids.append(sess.id)
+        db.add_all([
+            SecurityEvent(session_id=sess.id, scenario="new_device", event_type="known_device_login",
+                          timestamp=now - timedelta(days=1), source="192.0.2.1", target="conflict_acct",
+                          device="old", location="Bengaluru",
+                          payload_json=json.dumps({"device_id": "old"})),
+            *[SecurityEvent(session_id=sess.id, scenario="new_device", event_type="failed_login",
+                            timestamp=now - timedelta(seconds=8 - 2 * i), source="198.51.100.70",
+                            target="conflict_acct", device="new", location="London",
+                            payload_json=json.dumps({"device_id": "new"}))
+              for i in range(5)],
+            SecurityEvent(session_id=sess.id, scenario="new_device", event_type="login_attempt",
+                          timestamp=now + timedelta(seconds=60), source="198.51.100.70",
+                          target="conflict_acct", device="new", location="Bengaluru",
+                          payload_json=json.dumps({"device_id": "new", "lat": 12.97, "lon": 77.59})),
+            SecurityEvent(session_id=sess.id, scenario="new_device", event_type="login_attempt",
+                          timestamp=now + timedelta(seconds=120), source="198.51.100.70",
+                          target="conflict_acct", device="new", location="London",
+                          payload_json=json.dumps({"device_id": "new", "lat": 51.50, "lon": -0.12})),
+        ])
+        db.commit()
+        labels = {d.label for d in evaluate_rules(sess.id, db)}
+        assert labels == {
+            "sustained_attack_no_compromise",
+            "multiple_failed_logins_detected",
+            "impossible_travel_detected",
+            "new_device_detected",
+            "suspicious_login_detected",
+        }, labels
+
+        # 5. Every persisted detection is reproducible: it records the thresholds
+        #    it was evaluated under together with the evidence it correlated.
+        for d in db.query(Detection).filter(Detection.session_id == sess.id).all():
+            parsed = json.loads(d.features)
+            assert "rule_config" in parsed and "correlated_events" in parsed, d.label
+            assert parsed["duplicate_events_collapsed"] == 0, d.label
+            assert parsed["rule_config"]["repeated_failures"] == BEHAVIORAL_DEFAULTS["repeated_failures"]
+            assert parsed["correlated_events"], f"{d.label} has no evidence references"
+            for ref in parsed["correlated_events"]:
+                assert ref["type"] in ("SecurityEvent", "SuricataEvent")
+                assert db.get(SecurityEvent, ref["event_id"]) is not None or ref.get("is_hypothesis")
+
+        # 6. Thresholds are explicit and configurable through scenario config.
+        #    Lowering the reported repeated-failure threshold to 3 must make the
+        #    same 3-failure evidence fire; unknown keys must not alter behaviour.
+        custom = Scenario(
+            name="Behavioural threshold override probe",
+            category=scenario.category,
+            difficulty=scenario.difficulty,
+            description="Test-only scenario verifying explicit threshold configuration.",
+            config_json=json.dumps({"behavioral_rule": {
+                "repeated_failures": 3, "not_a_real_threshold": 99, "name": "ignored",
+            }}),
+        )
+        db.add(custom)
+        db.commit()
+        db.refresh(custom)
+        extra_scenario_ids.append(custom.id)
+
+        cfg = _rule_config(json.loads(custom.config_json))
+        assert cfg["repeated_failures"] == 3
+        assert cfg["_unrecognized_overrides"] == ["not_a_real_threshold"]
+        assert "name" not in cfg
+
+        sess = _new_session(db, custom, "override_three_failures")
+        session_ids.append(sess.id)
+        db.add_all([
+            SecurityEvent(session_id=sess.id, scenario="multiple_failed_logins",
+                          event_type="failed_login", timestamp=now + timedelta(seconds=2 * i),
+                          source="198.51.100.80", target="override_acct")
+            for i in range(3)
+        ])
+        db.commit()
+        labels = {d.label for d in evaluate_rules(sess.id, db)}
+        assert "multiple_failed_logins_detected" in labels, labels
+
+        # The same evidence under the reported default must NOT fire rule 8.
+        sess = _new_session(db, scenario, "default_three_failures")
+        session_ids.append(sess.id)
+        db.add_all([
+            SecurityEvent(session_id=sess.id, scenario="multiple_failed_logins",
+                          event_type="failed_login", timestamp=now + timedelta(seconds=2 * i),
+                          source="198.51.100.81", target="default_acct")
+            for i in range(3)
+        ])
+        db.commit()
+        labels = {d.label for d in evaluate_rules(sess.id, db)}
+        assert "multiple_failed_logins_detected" not in labels, labels
+
+        # Defaults must not be mutated by a scenario override (no global leak).
+        assert BEHAVIORAL_DEFAULTS["repeated_failures"] == 5
+        assert BEHAVIORAL_DEFAULTS["user_profiles"] == {
+            "marketing_lead": {"normal_window_start": 9, "normal_window_end": 18}
+        }
+        print("Rule engine robustness edge cases passed.")
+    finally:
+        for sid in session_ids:
+            db.query(Detection).filter(Detection.session_id == sid).delete()
+            db.query(SecurityEvent).filter(SecurityEvent.session_id == sid).delete()
+            db.query(SessionModel).filter(SessionModel.id == sid).delete()
+        for sc_id in extra_scenario_ids:
+            db.query(Scenario).filter(Scenario.id == sc_id).delete()
+        db.commit()
+        db.close()
+
+
 if __name__ == "__main__":
     test_port_scan_rule_detection()
     test_new_device_rule_detection()
     test_anomalous_login_time_rule_detection()
     test_impossible_travel_rule_detection()
+    test_brute_force_and_sustained_attack_rules()
     test_multiple_failed_logins_rule_detection()
     test_combined_multi_signal_detection()
     test_credential_stuffing_rule_detection()
     test_suspicious_login_rule_detection()
+    test_ground_truth_fields_never_reach_behavioural_decisions()
+    test_rule_engine_robustness_edge_cases()
     print("\nALL RULE ENGINE TESTS PASSED!")

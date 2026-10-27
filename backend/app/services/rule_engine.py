@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -12,10 +13,11 @@ from app.models import (
     SecurityEvent,
     Detection,
     DetectionSource,
-    ScenarioCategory,
 )
 from app.services.phishing_detector import evaluate_phishing_url
 from app.services.correlation_engine import run_correlation, normalize_detection
+
+logger = logging.getLogger(__name__)
 
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -27,9 +29,115 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * c
 
 
+# ---------------------------------------------------------------------------
+# Behavioral rule thresholds (research-paper reported configuration).
+#
+# These are the ONLY tunables for the behavioural engine. They are exposed as
+# data so the values a detection was produced under can be persisted with the
+# evidence and reproduced later. A scenario's ``config_json.behavioral_rule``
+# block may override them explicitly; nothing is altered implicitly.
+# ---------------------------------------------------------------------------
+BEHAVIORAL_DEFAULTS: Dict[str, float] = {
+    "failed_login_burst": 3,            # failures that establish a brute-force pattern
+    "sustained_failures": 4,            # failures with no success => sustained attack
+    # Repeated-failed-login rule fires on the behaviour (a burst of invalid
+    # credentials), not on the dataset label. 5 matches the documented velocity
+    # threshold carried in the generated telemetry payload.
+    "repeated_failures": 5,
+    "repeated_failures_window_seconds": 300.0,
+    "credential_stuffing_accounts": 3,  # distinct accounts targeted from one source
+    "credential_stuffing_window_seconds": 300.0,
+    "impossible_travel_speed_kmh": 900.0,
+    "port_scan_threshold_ports": 15,
+    "port_scan_window_seconds": 10,
+    "normal_window_start": 7,           # default working-hour window (UTC hour)
+    "normal_window_end": 22,
+    # Per-account working-hour profiles that override the default window.
+    # Declared as configuration (not inline logic) so the reported values are
+    # visible, auditable and overridable from a scenario's config block.
+    "user_profiles": {
+        "marketing_lead": {"normal_window_start": 9, "normal_window_end": 18},
+    },
+}
 
-def _normalize_dt(dt: datetime) -> datetime:
-    """Normalize datetime to timezone-aware UTC datetime."""
+# Legacy override keys used by the seeded scenario catalogue in
+# ``app/routers/scenarios.py`` map onto the canonical registry names above, so an
+# existing scenario config can tune a threshold without renaming anything.
+_BEHAVIORAL_KEY_ALIASES: Dict[str, str] = {
+    "threshold_ports": "port_scan_threshold_ports",
+    "window_seconds": "port_scan_window_seconds",
+}
+
+# Event types that carry authentication *attempt* semantics for the rules below.
+FAILED_EVENT_MARKER = "failed"
+SUCCESS_EVENT_MARKER = "success"
+AUTH_ATTEMPT_TYPES = {
+    "login_attempt", "successful_login", "suspicious_login",
+}
+BASELINE_LOGIN_TYPES = {"known_device_login", "baseline_login"}
+
+
+def _rule_config(scenario_config: Optional[Dict]) -> Dict[str, float]:
+    """Merge a scenario's explicit overrides over the reported defaults.
+
+    Only keys that already exist in :data:`BEHAVIORAL_DEFAULTS` (possibly reached
+    through :data:`_BEHAVIORAL_KEY_ALIASES`) are honoured, and ``None`` values are
+    ignored. Unknown keys are reported in the returned mapping under
+    ``_unrecognized_overrides`` instead of silently changing behaviour, so the
+    thresholds behind every detection stay auditable.
+    """
+    merged = {k: (dict(v) if isinstance(v, dict) else v)
+              for k, v in BEHAVIORAL_DEFAULTS.items()}
+    override = (scenario_config or {}).get("behavioral_rule", {}) or {}
+
+    normalized: Dict[str, object] = {}
+    for key, value in override.items():
+        if key in ("name", "description"):
+            continue
+        normalized[_BEHAVIORAL_KEY_ALIASES.get(key, key)] = value
+
+    unrecognized = sorted(
+        key for key in normalized
+        if key not in BEHAVIORAL_DEFAULTS
+    )
+    for key in merged:
+        value = normalized.get(key)
+        if value is not None:
+            merged[key] = value
+    if unrecognized:
+        merged["_unrecognized_overrides"] = unrecognized
+    return merged
+
+
+def _is_failure(event_type: Optional[str]) -> bool:
+    return FAILED_EVENT_MARKER in (event_type or "").lower()
+
+
+def _is_success(event_type: Optional[str]) -> bool:
+    et = (event_type or "").lower()
+    return SUCCESS_EVENT_MARKER in et
+
+
+def _establishes_baseline(event_type: Optional[str]) -> bool:
+    """An authentication that contributes to an account's known-good profile.
+
+    Explicitly independent of ``detection_status``/``scenario``: familiarity is
+    earned by observed successful/known-device authentications only.
+    """
+    et = (event_type or "").lower()
+    return et in BASELINE_LOGIN_TYPES or _is_success(et)
+
+
+
+def _normalize_dt(dt: Optional[datetime]) -> datetime:
+    """Normalize a timestamp to a timezone-aware UTC datetime.
+
+    ``None`` is tolerated and mapped to the epoch so partially populated legacy
+    telemetry sorts first instead of raising inside an ordering key. Absent
+    timestamps therefore never contribute to a velocity or window calculation.
+    """
+    if dt is None:
+        return datetime(1970, 1, 1, tzinfo=timezone.utc)
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
@@ -43,16 +151,18 @@ def _evaluate_port_scan(
 ) -> Optional[Detection]:
     """
     Evaluates the port_scan behavioral rule:
-    Groups events by src_ip and slides a window of window_seconds.
-    If distinct dest_port count >= threshold_ports, produces a Detection row.
+    Groups events by src_ip and slides a window of port_scan_window_seconds.
+    If distinct dest_port count >= port_scan_threshold_ports, a Detection row is
+    produced. The thresholds used are taken from the resolved rule configuration
+    and persisted alongside the evidence, so the verdict is reproducible.
     """
     rule_label = "port_scan_detected"
     if rule_label in existing_labels:
         return None
 
-    behavioral_rule = config.get("behavioral_rule", {})
-    threshold_ports = int(behavioral_rule.get("threshold_ports", 15))
-    window_seconds = float(behavioral_rule.get("window_seconds", 10))
+    cfg = _rule_config(config)
+    threshold_ports = int(cfg["port_scan_threshold_ports"])
+    window_seconds = float(cfg["port_scan_window_seconds"])
 
     events = (
         db.query(SuricataEvent)
@@ -60,7 +170,7 @@ def _evaluate_port_scan(
             SuricataEvent.session_id == session_id,
             SuricataEvent.dest_port.isnot(None),
         )
-        .order_by(SuricataEvent.timestamp.asc())
+        .order_by(SuricataEvent.timestamp.asc(), SuricataEvent.id.asc())
         .all()
     )
 
@@ -110,7 +220,11 @@ def _evaluate_port_scan(
                         "is_hypothesis": False
                     })
                 
-                features_json = json.dumps({"correlated_events": correlated})
+                features_json = json.dumps({
+                    "correlated_events": correlated,
+                    "rule_config": cfg,
+                    "duplicate_events_collapsed": 0,
+                })
 
                 detection = Detection(
                     session_id=session_id,
@@ -125,14 +239,13 @@ def _evaluate_port_scan(
                 db.commit()
                 db.refresh(detection)
                 existing_labels.add(rule_label)
-                
+
                 try:
                     norm = normalize_detection(detection)
                     run_correlation(db, norm)
                 except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).error(f"Failed to correlate port scan detection: {e}")
-                    
+                    logger.error("Failed to correlate port scan detection: %s", e)
+
                 return detection
 
     return None
@@ -142,77 +255,119 @@ def _evaluate_security_events(
     session_id: int,
     db: Session,
     existing_labels: Set[str],
+    config: Optional[Dict] = None,
 ) -> List[Detection]:
     """
-    Evaluates rule-based detections against synthetic and live SecurityEvent telemetry
-    (brute force, credential stuffing, suspicious login, impossible travel, new device, etc.).
+    Evaluates the behavioural rule set against SecurityEvent telemetry.
+
+    Input discipline (paper section on behavioural detection):
+      * Decisions are taken ONLY from event_type, source, target, device,
+        location, payload coordinates and timestamps. The stored ground-truth
+        columns ``scenario`` and ``detection_status`` are generator metadata and
+        are never read here, so a scenario label cannot leak into a verdict.
+      * Events are ordered by (timestamp, id) so out-of-order ingestion cannot
+        change the outcome.
+      * Byte-identical repetitions of one observation are collapsed to a single
+        event (at-least-once delivery). Counting a re-delivered row twice would
+        inflate every velocity threshold below.
+      * Every detection records the thresholds it was evaluated under plus the
+        evidence ids, so the verdict can be reproduced from stored evidence.
     """
+    cfg = _rule_config(config)
+
     sec_events = (
         db.query(SecurityEvent)
         .filter(SecurityEvent.session_id == session_id)
-        .order_by(SecurityEvent.timestamp.asc())
+        .order_by(SecurityEvent.timestamp.asc(), SecurityEvent.id.asc())
         .all()
     )
 
     if not sec_events:
         return []
 
+    # Stable, explicitly sorted event stream shared by all rules below.
+    sec_events = sorted(sec_events, key=lambda e: (_normalize_dt(e.timestamp), e.id))
+
+    # Collapse exactly-repeated observations before any counting happens.
+    seen: Set[tuple] = set()
+    unique_events: List[SecurityEvent] = []
+    duplicates_collapsed = 0
+    for ev in sec_events:
+        key = (
+            ev.event_type, _normalize_dt(ev.timestamp), ev.source, ev.target,
+            ev.device, ev.location, ev.payload_json,
+        )
+        if key in seen:
+            duplicates_collapsed += 1
+            continue
+        seen.add(key)
+        unique_events.append(ev)
+    sec_events = unique_events
+
     new_detections: List[Detection] = []
-    scenarios_present = {e.scenario for e in sec_events}
 
     def _add_detection(label: str, explanation: str, confidence: float = 1.0, correlated_events: List[Dict] = None):
-        if label not in existing_labels:
-            feat = json.dumps({"correlated_events": correlated_events}) if correlated_events else None
-            det = Detection(
-                session_id=session_id,
-                source=DetectionSource.RULE,
-                label=label,
-                confidence=confidence,
-                explanation=explanation,
-                features=feat,
-                timestamp=datetime.now(timezone.utc),
-            )
-            db.add(det)
-            db.commit()
-            db.refresh(det)
-            existing_labels.add(label)
-            new_detections.append(det)
-            
-            try:
-                norm = normalize_detection(det)
-                run_correlation(db, norm)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Failed to correlate security event detection: {e}")
+        if label in existing_labels:
+            return
+        payload = {
+            "correlated_events": correlated_events or [],
+            "rule_config": cfg,
+            "duplicate_events_collapsed": duplicates_collapsed,
+        }
+        det = Detection(
+            session_id=session_id,
+            source=DetectionSource.RULE,
+            label=label,
+            confidence=confidence,
+            explanation=explanation,
+            features=json.dumps(payload),
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(det)
+        db.commit()
+        db.refresh(det)
+        existing_labels.add(label)
+        new_detections.append(det)
+
+        try:
+            norm = normalize_detection(det)
+            run_correlation(db, norm)
+        except Exception as e:
+            logger.error("Failed to correlate security event detection: %s", e)
 
     # 1. Brute Force Login & Sustained Attack
     # Detected by grouping events by target and looking for multiple failed logins
     targets = set(e.target for e in sec_events if e.target)
-    for target in targets:
-        target_events = sorted([e for e in sec_events if e.target == target], key=lambda x: _normalize_dt(x.timestamp))
+    for target in sorted(targets):
+        target_events = [e for e in sec_events if e.target == target]
         failed = 0
         src = None
+        compromised = False
         for ev in target_events:
-            if "failed" in ev.event_type.lower():
+            if _is_failure(ev.event_type):
                 failed += 1
                 if not src:
                     src = ev.source
-            elif "success" in ev.event_type.lower() and failed >= 3:
+            elif _is_success(ev.event_type) and failed >= cfg["failed_login_burst"]:
                 # Correlate failure burst and success
-                corr = [{"event_id": e.id, "type": "SecurityEvent", "timestamp": e.timestamp.isoformat(), "reason": "Failed login attempt"} for e in target_events[:target_events.index(ev)] if "failed" in e.event_type.lower()]
+                corr = [
+                    {"event_id": e.id, "type": "SecurityEvent",
+                     "timestamp": e.timestamp.isoformat(), "reason": "Failed login attempt"}
+                    for e in target_events[:target_events.index(ev)] if _is_failure(e.event_type)
+                ]
                 corr.append({"event_id": ev.id, "type": "SecurityEvent", "timestamp": ev.timestamp.isoformat(), "reason": "Successful login after brute force"})
-                
+
                 _add_detection(
                     "brute_force_detected",
                     f"High-velocity authentication failure burst: {failed} failed login attempts from {src} targeting {target}, followed by a successful login",
                     confidence=0.95,
                     correlated_events=corr
                 )
-                failed = 0 # reset
+                compromised = True
                 break
-        
-        if failed >= 4 and "brute_force_detected" not in existing_labels:
-            corr = [{"event_id": e.id, "type": "SecurityEvent", "timestamp": e.timestamp.isoformat(), "reason": "Sustained failed login attempt"} for e in target_events if "failed" in e.event_type.lower()]
+
+        if failed >= cfg["sustained_failures"] and not compromised:
+            corr = [{"event_id": e.id, "type": "SecurityEvent", "timestamp": e.timestamp.isoformat(), "reason": "Sustained failed login attempt"} for e in target_events if _is_failure(e.event_type)]
             _add_detection(
                 "sustained_attack_no_compromise",
                 f"Sustained authentication failures: {failed} failed login attempts from {src} targeting {target} with no successful login",
@@ -222,74 +377,86 @@ def _evaluate_security_events(
 
     # 2. Credential Stuffing
     # Detected by grouping events by source and looking for rapid attempts across multiple distinct target accounts.
-    auth_events = [e for e in sec_events if e.event_type in ["failed_login", "login_attempt", "failed_authentication"]]
-    sources = set(e.source for e in auth_events if e.source)
+    auth_events = [e for e in sec_events if _is_failure(e.event_type) or e.event_type == "login_attempt"]
+    sources = sorted({e.source for e in auth_events if e.source})
+    stuff_window = float(cfg["credential_stuffing_window_seconds"])
     for src in sources:
-        src_events = sorted([e for e in auth_events if e.source == src], key=lambda x: _normalize_dt(x.timestamp))
-        if len(src_events) < 3:
+        src_events = [e for e in auth_events if e.source == src]
+        if len(src_events) < int(cfg["credential_stuffing_accounts"]):
             continue
-            
+
         for i in range(len(src_events)):
             start_time = _normalize_dt(src_events[i].timestamp)
             window_events = []
             for j in range(i, len(src_events)):
-                if (_normalize_dt(src_events[j].timestamp) - start_time).total_seconds() <= 300:
+                if (_normalize_dt(src_events[j].timestamp) - start_time).total_seconds() <= stuff_window:
                     window_events.append(src_events[j])
                 else:
                     break
-                    
-            unique_targets = set(e.target for e in window_events if e.target)
-            if len(window_events) >= 3 and len(unique_targets) >= 3:
+
+            unique_targets = {e.target for e in window_events if e.target}
+            if (len(window_events) >= cfg["credential_stuffing_accounts"]
+                    and len(unique_targets) >= cfg["credential_stuffing_accounts"]):
                 corr = [{"event_id": e.id, "type": "SecurityEvent", "timestamp": e.timestamp.isoformat(), "reason": f"Attempt against account {e.target}"} for e in window_events]
                 _add_detection(
                     "credential_stuffing_detected",
-                    f"Credential stuffing detected: {src} attempted authentication against {len(unique_targets)} distinct accounts within 5 minutes",
+                    f"Credential stuffing detected: {src} attempted authentication against {len(unique_targets)} distinct accounts within {int(stuff_window)} seconds",
                     confidence=0.96,
                     correlated_events=corr
                 )
                 break  # Already generated for this source
 
     # 3. Suspicious Login / Account Takeover
-    # Detected when an authentication event deviates significantly from established baseline (both location AND device).
-    for target in set(e.target for e in sec_events if e.target):
-        target_events = sorted([e for e in sec_events if e.target == target], key=lambda x: _normalize_dt(x.timestamp))
+    # Detected when an authentication event deviates from the established baseline
+    # in BOTH location and device. The baseline is built from prior successful /
+    # known-good authentications observed in the telemetry itself.
+    for target in sorted({e.target for e in sec_events if e.target}):
+        target_events = [e for e in sec_events if e.target == target]
         known_devices = set()
         known_locations = set()
-        
+
         for ev in target_events:
             try:
                 payload = json.loads(ev.payload_json or "{}")
                 dev_id = payload.get("device_id") or ev.device
             except Exception:
                 dev_id = ev.device
-            
+
             loc = ev.location
-            
-            # Establish baseline from known good events
-            if ev.event_type in ["known_device_login", "baseline_login"] or getattr(ev, "detection_status", "") == "Normal":
-                if dev_id: known_devices.add(dev_id)
-                if loc: known_locations.add(loc)
-            
-            # Evaluate new login attempts/successes
-            elif ev.event_type in ["login_attempt", "successful_login", "suspicious_login"]:
-                if known_locations and known_devices:
-                    if loc and loc not in known_locations and dev_id and dev_id not in known_devices:
-                        # Find baseline events to correlate as hypothesis
-                        baseline_events = [e for e in target_events if e.event_type in ["known_device_login", "baseline_login"]]
-                        corr = [{"event_id": ev.id, "type": "SecurityEvent", "timestamp": ev.timestamp.isoformat(), "reason": "Suspicious deviating login"}]
-                        if baseline_events:
-                            corr.append({"event_id": baseline_events[-1].id, "type": "SecurityEvent", "timestamp": baseline_events[-1].timestamp.isoformat(), "reason": "Prior baseline event for comparison", "is_hypothesis": True})
-                            
-                        _add_detection(
-                            "suspicious_login_detected",
-                            f"Suspicious login detected for {target}: authentication from {loc} using previously unseen device {dev_id}",
-                            confidence=0.90,
-                            correlated_events=corr
-                        )
+
+            # 1) Evaluate the current authentication against the history
+            #    established by STRICTLY EARLIER logins for this account.
+            if (
+                known_locations
+                and known_devices
+                and ev.event_type in AUTH_ATTEMPT_TYPES
+                and loc and loc not in known_locations
+                and dev_id and dev_id not in known_devices
+            ):
+                baseline_events = [e for e in target_events if _establishes_baseline(e.event_type)]
+                corr = [{"event_id": ev.id, "type": "SecurityEvent", "timestamp": ev.timestamp.isoformat(), "reason": "Suspicious deviating login"}]
+                if baseline_events:
+                    corr.append({"event_id": baseline_events[-1].id, "type": "SecurityEvent", "timestamp": baseline_events[-1].timestamp.isoformat(), "reason": "Prior baseline event for comparison", "is_hypothesis": True})
+
+                _add_detection(
+                    "suspicious_login_detected",
+                    f"Suspicious login detected for {target}: authentication from {loc} using previously unseen device {dev_id}",
+                    confidence=0.90,
+                    correlated_events=corr
+                )
+
+            # 2) Then fold this event into the known-good history. Baseline
+            #    establishment is derived purely from observed authentication
+            #    telemetry - no generator ground-truth marker is read.
+            if _establishes_baseline(ev.event_type):
+                if dev_id:
+                    known_devices.add(dev_id)
+                if loc:
+                    known_locations.add(loc)
 
     # 4. Impossible Travel
-    for target in set(e.target for e in sec_events):
-        target_events = sorted([e for e in sec_events if e.target == target and e.event_type == "login_attempt"], key=lambda x: _normalize_dt(x.timestamp))
+    for target in sorted({e.target for e in sec_events if e.target}):
+        target_events = [e for e in sec_events if e.target == target and e.event_type == "login_attempt"]
         for i in range(len(target_events) - 1):
             ev1 = target_events[i]
             ev2 = target_events[i+1]
@@ -306,7 +473,7 @@ def _evaluate_security_events(
                 interval_hours = (_normalize_dt(ev2.timestamp) - _normalize_dt(ev1.timestamp)).total_seconds() / 3600.0
                 if interval_hours > 0:
                     speed_kmh = distance_km / interval_hours
-                    if speed_kmh > 900:
+                    if speed_kmh > cfg["impossible_travel_speed_kmh"]:
                         interval_minutes = interval_hours * 60
                         corr = [
                             {"event_id": ev1.id, "type": "SecurityEvent", "timestamp": ev1.timestamp.isoformat(), "reason": f"Login attempt from location A (lat {lat1})"},
@@ -320,8 +487,8 @@ def _evaluate_security_events(
                         )
 
     # 5. New Device Login
-    for target in set(e.target for e in sec_events):
-        target_events = sorted([e for e in sec_events if e.target == target], key=lambda x: x.timestamp)
+    for target in sorted({e.target for e in sec_events if e.target}):
+        target_events = [e for e in sec_events if e.target == target]
         known_devices = set()
         for ev in target_events:
             try:
@@ -362,17 +529,18 @@ def _evaluate_security_events(
                 break
 
     # 7. Anomalous Login Time
-    # Per-user profiles take precedence; any other user with a login_attempt
-    # between 00:00 and 06:59 is flagged using the default off-hours window.
-    USER_PROFILES = {
-        "marketing_lead": {"normal_window_start": 9, "normal_window_end": 18},
+    # Per-account working-hour profiles take precedence; accounts with no profile
+    # are judged against the default window. Profiles come from scenario config
+    # (``behavioral_rule.user_profiles``) merged over the reported defaults.
+    default_profile = {
+        "normal_window_start": int(cfg.get("normal_window_start", 7)),
+        "normal_window_end": int(cfg.get("normal_window_end", 22)),
     }
-    DEFAULT_NORMAL_START = 7
-    DEFAULT_NORMAL_END = 22  # 10pm
+    user_profiles = dict(cfg.get("user_profiles", {}) or {})
     for ev in sec_events:
         if ev.event_type != "login_attempt":
             continue
-        profile = USER_PROFILES.get(ev.target, {"normal_window_start": DEFAULT_NORMAL_START, "normal_window_end": DEFAULT_NORMAL_END})
+        profile = user_profiles.get(ev.target, default_profile)
         hour = _normalize_dt(ev.timestamp).hour
         start = profile["normal_window_start"]
         end = profile["normal_window_end"]
@@ -386,30 +554,46 @@ def _evaluate_security_events(
                 correlated_events=corr
             )
 
-    # 8. Multiple Failed Logins (distinct rule for multiple_failed_logins scenario)
-    # Triggered when multiple failed authentication events occur in the multiple_failed_logins scenario.
-    is_mfl = any(getattr(e, "scenario", "") == "multiple_failed_logins" for e in sec_events)
-    if is_mfl:
-        for target in set(e.target for e in sec_events if e.target):
-            target_events = [e for e in sec_events if e.target == target]
-            failed_evs = [e for e in target_events if "failed" in e.event_type.lower()]
-            if len(failed_evs) >= 3:
-                src = failed_evs[0].source if failed_evs else "unknown"
+    # 8. Multiple Failed Logins
+    # Triggered purely from telemetry: a bounded window containing at least
+    # `repeated_failures` failed authentications from one source to one account.
+    # The generator's `scenario` label is deliberately NOT consulted, so this
+    # rule fires on the behaviour rather than on the dataset's name.
+    mfl_window = float(cfg["repeated_failures_window_seconds"])
+    mfl_count = int(cfg["repeated_failures"])
+    pairs = {(e.source, e.target) for e in sec_events if e.source and e.target and _is_failure(e.event_type)}
+    for pair in sorted(pairs):
+        pair_fails = [e for e in sec_events
+                      if (e.source, e.target) == pair and _is_failure(e.event_type)]
+        if len(pair_fails) < mfl_count:
+            continue
+        for i in range(len(pair_fails)):
+            start_time = _normalize_dt(pair_fails[i].timestamp)
+            window_events = []
+            for j in range(i, len(pair_fails)):
+                if (_normalize_dt(pair_fails[j].timestamp) - start_time).total_seconds() <= mfl_window:
+                    window_events.append(pair_fails[j])
+                else:
+                    break
+            if len(window_events) >= mfl_count:
+                span = (_normalize_dt(window_events[-1].timestamp) - start_time).total_seconds()
                 corr = [{
                     "event_id": e.id,
                     "type": "SecurityEvent",
                     "timestamp": e.timestamp.isoformat(),
-                    "reason": f"Failed login attempt #{i+1}"
-                } for i, e in enumerate(failed_evs)]
+                    "reason": f"Failed login attempt #{k + 1}"
+                } for k, e in enumerate(window_events)]
                 _add_detection(
                     "multiple_failed_logins_detected",
-                    f"Multiple failed login threshold exceeded: {len(failed_evs)} consecutive failures from {src} targeting {target}",
+                    f"Multiple failed login threshold exceeded: {len(window_events)} failed attempts from {pair[0]} targeting {pair[1]} within {span:.0f}s (threshold {mfl_count} in {mfl_window:.0f}s)",
                     confidence=0.88,
                     correlated_events=corr
                 )
+                break
 
-    # 9. Combined Multi-Signal: if both anomalous time AND new device detections fired
-    # This is implicitly handled by multi-signal bonus in risk engine; no new rule needed.
+    # 9. Combined Multi-Signal: no dedicated rule by design - corroboration
+    # across distinct labels is expressed by the multi-signal term of the
+    # risk-fusion engine (see risk_engine.compute_risk_score).
 
     return new_detections
 
@@ -449,19 +633,15 @@ def evaluate_rules(session_id: int, db: Session) -> List[Detection]:
 
     new_detections: List[Detection] = []
 
-    # 1. Evaluate Network IDS Suricata Rules
-    if scenario and scenario.category == ScenarioCategory.PORT_SCAN:
-        detection = _evaluate_port_scan(session_id, config, db, existing_labels)
-        if detection:
-            new_detections.append(detection)
-    else:
-        # Also check for port scan events if Suricata events exist
-        detection = _evaluate_port_scan(session_id, config, db, existing_labels)
-        if detection:
-            new_detections.append(detection)
+    # 1. Network/port-scan rule. Evaluated from Suricata evidence alone - the
+    #    scenario category is never used to decide whether the behaviour is
+    #    present, only whether the telemetry exists to be examined.
+    detection = _evaluate_port_scan(session_id, config, db, existing_labels)
+    if detection:
+        new_detections.append(detection)
 
     # 2. Evaluate Host/Auth/Security Event Telemetry
-    sec_detections = _evaluate_security_events(session_id, db, existing_labels)
+    sec_detections = _evaluate_security_events(session_id, db, existing_labels, config)
     new_detections.extend(sec_detections)
 
     return new_detections

@@ -18,9 +18,16 @@ def isolated_test_db():
             os.remove(TEST_DB_PATH)
         except Exception:
             pass
-        
+
+    # Create the schema explicitly so every test module is runnable on its own.
+    # Previously tables only appeared as a side effect of a TestClient starting
+    # the app lifespan, which made single-file runs fail with "no such table".
+    from app.database import Base, engine
+    import app.models  # noqa: F401  (registers all mappers on Base.metadata)
+    Base.metadata.create_all(bind=engine)
+
     yield
-    
+
     # Cleanup after tests
     try:
         from app.database import engine
