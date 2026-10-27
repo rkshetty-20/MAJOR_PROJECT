@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------
+   Centralized design tokens (RGB triplets so Tailwind can apply alpha).
+   Referenced by tailwind.config.js theme.extend.colors.
+------------------------------------------------------------------- */
+:root {
+  --color-bg-app: 3 7 18;         /* #030712 */
+  --color-bg-panel: 15 23 42;     /* slate-900 */
+  --color-bg-elevated: 30 41 59;  /* slate-800 */
+  --color-bg-surface: 15 23 42;   /* sidebar / surface */
+  --color-border-subtle: 30 41 59;
+  --color-border-strong: 51 65 85;
+  --color-accent: 99 102 241;     /* indigo-500 */
+  --color-accent-soft: 129 140 248; /* indigo-400 */
+  --color-text-primary: 248 250 252;  /* slate-50 */
+  --color-text-secondary: 203 213 225; /* slate-300 */
+  --color-text-muted: 148 163 184;     /* slate-400 */
+  --color-text-faint: 100 116 139;     /* slate-500 */
+  --color-success: 52 211 153;    /* emerald-400 */
+  --color-warning: 251 191 36;    /* amber-400 */
+  --color-error: 244 63 94;       /* rose-500 */
+  --color-info: 56 189 248;       /* sky-400 */
+
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: rgb(var(--color-bg-app));
+  color: rgb(var(--color-text-primary));
+}
+
+/* Visible, consistent keyboard focus (Phase 16) without disturbing mouse users. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--color-accent) / 0.75);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Thin, theme-consistent scrollbars used across the shell. */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-border-strong) / 0.8);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--color-border-strong));
+}
+
+/* Respect user motion preferences (Phase 16). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

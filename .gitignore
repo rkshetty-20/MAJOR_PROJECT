@@ -1,0 +1,68 @@
+# Environments & Credentials
+.env
+*.env
+!.env.example
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+.venv/
+
+# SQLite Database
+*.db
+*.sqlite
+*.sqlite3
+backend/aod_ips.db
+
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+frontend/dist/
+frontend/dist-ssr/
+*.tsbuildinfo
+.eslintcache
+
+# Vite
+.vite/
+
+# Editors & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Scratch / one-off audit scripts (never commit these)
+scratch/
+scratch_*.py
+update_tests.py
+test_system.db
+powershell.exe

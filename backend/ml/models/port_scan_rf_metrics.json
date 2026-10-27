@@ -1,0 +1,9 @@
+{
+  "accuracy": 1.0,
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1": 1.0,
+  "trained_at": "2026-10-07T09:15:05.719713+00:00",
+  "data_source": "synthetic",
+  "n_samples": 500
+}
