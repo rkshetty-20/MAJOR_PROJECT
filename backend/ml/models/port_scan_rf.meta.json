@@ -1,0 +1,50 @@
+{
+  "artifact_filename": "port_scan_rf.joblib",
+  "attested_at_note": "The estimator was not retrained by this tool. Hyper-parameters, input count and class ordering are read from the artifact itself; the dataset digest is recomputed from the documented generator; metrics are copied from the existing *_metrics.json and flagged as reported, not re-measured.",
+  "classes": [
+    0,
+    1
+  ],
+  "data_random_seed": 42,
+  "evaluation": {
+    "accuracy": 1.0,
+    "data_source": "synthetic",
+    "f1": 1.0,
+    "n_samples": 500,
+    "precision": 1.0,
+    "provenance": "reported_by_existing_metrics_sidecar_not_remeasured",
+    "recall": 1.0,
+    "trained_at": "2026-10-07T09:15:05.719713+00:00"
+  },
+  "feature_names": [
+    "distinct_dest_ports",
+    "events_per_second",
+    "distinct_dest_ips",
+    "avg_severity",
+    "protocol_diversity"
+  ],
+  "feature_schema_version": "1.0",
+  "limitations": "Reported metrics are measured on a synthetic hold-out whose labels are derived from the scenario generator's own signatures. Perfect synthetic accuracy does not establish real-world generalization and must not be quoted as production detection performance.",
+  "model_config": {
+    "class_name": "RandomForestClassifier",
+    "max_depth": 6,
+    "min_samples_split": 2,
+    "n_estimators": 100,
+    "random_state": 42
+  },
+  "model_version": "base_model",
+  "n_features_in": 5,
+  "provenance": "retro_attested_from_bundled_artifact",
+  "random_seed": 42,
+  "registry_version": "1.0",
+  "samples": {
+    "test": 125,
+    "total": 500,
+    "train": 375
+  },
+  "sklearn_version": "1.9.1",
+  "task_name": "port_scan",
+  "training_data_source": "ml/train_port_scan_model.py::generate_synthetic_dataset(250+250, seed=42)",
+  "training_data_version": "sha256:cef2095e90ef792d",
+  "written_at": "2026-10-27T10:07:47.369984+00:00"
+}

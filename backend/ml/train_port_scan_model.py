@@ -7,9 +7,7 @@ import sys
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Tuple
 
-import joblib
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 
@@ -19,13 +17,22 @@ BACKEND_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from ml.features import extract_features, features_to_vector, FEATURE_NAMES
+from ml.features import (
+    FEATURE_NAMES,
+    RANDOM_FOREST_BASELINE,
+    build_classifier,
+    describe_classifier,
+    extract_features,
+    vectorize,
+)
+from ml import registry
+from ml.registry import SYNTHETIC_LIMITATION, TRAINING_SEED
 
 
 def generate_synthetic_dataset(
     num_normal: int = 250,
     num_scan: int = 250,
-    random_seed: int = 42,
+    random_seed: int = TRAINING_SEED,
 ) -> Tuple[List[List[float]], List[int]]:
     """
     Generates synthetic labeled windows for port_scan training.
@@ -73,7 +80,7 @@ def generate_synthetic_dataset(
             events.append(event)
 
         feature_dict = extract_features(events)
-        X_vectors.append(features_to_vector(feature_dict))
+        X_vectors.append(vectorize(feature_dict, "port_scan"))
         y_labels.append(0)
 
     # 2. Generate Port Scan Traffic Samples (Label 1)
@@ -103,7 +110,7 @@ def generate_synthetic_dataset(
             events.append(event)
 
         feature_dict = extract_features(events)
-        X_vectors.append(features_to_vector(feature_dict))
+        X_vectors.append(vectorize(feature_dict, "port_scan"))
         y_labels.append(1)
 
     return X_vectors, y_labels
@@ -145,7 +152,7 @@ def load_dataset_from_csv(csv_path: str) -> Tuple[List[List[float]], List[int]]:
 
     for key, events in grouped_events.items():
         feat_dict = extract_features(events)
-        X_vectors.append(features_to_vector(feat_dict))
+        X_vectors.append(vectorize(feat_dict, "port_scan"))
         y_labels.append(grouped_labels[key])
 
     return X_vectors, y_labels
@@ -189,14 +196,11 @@ def train_model(csv_path: str = None) -> None:
     print(f"Test Set Size:         {len(y_test)} samples (held-out)")
     print("-" * 70)
 
-    # 3. Model Training
-    clf = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=6,
-        min_samples_split=2,
-        random_state=42,
-    )
+    # 3. Model Training - the paper's reported baseline configuration, taken from
+    #    one declared source so the trainer and the service cannot drift.
+    clf = build_classifier()
     clf.fit(X_train, y_train)
+    print(f"Model Config:          {describe_classifier(clf)}")
 
     # 4. Evaluation on Held-Out Test Set
     y_pred = clf.predict(X_test)
@@ -230,16 +234,12 @@ def train_model(csv_path: str = None) -> None:
         print(f"  {name:25s}: {imp:.4f}")
     print("-" * 70)
 
-    # 6. Save Model Artifact
+    # 6. Save Model Artifact + mandatory provenance sidecar
     models_dir = os.path.join(CURRENT_DIR, "models")
     os.makedirs(models_dir, exist_ok=True)
     model_path = os.path.join(models_dir, "port_scan_rf.joblib")
 
-    joblib.dump(clf, model_path)
-    print(f"\n[SUCCESS] Model successfully saved to:\n  {model_path}")
-
-    # 7. Save Evaluation Metrics Artifact
-    metrics_path = os.path.join(models_dir, "port_scan_rf_metrics.json")
+    # 7. Evaluation metrics payload (computed from the real sklearn output above)
     weighted_avg = report_dict.get("weighted avg", {})
     source_label = "real" if (csv_path and os.path.isfile(csv_path)) else "synthetic"
 
@@ -251,13 +251,47 @@ def train_model(csv_path: str = None) -> None:
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "data_source": source_label,
         "n_samples": int(total_samples),
+        "n_train": int(len(y_train)),
+        "n_test": int(len(y_test)),
     }
 
+    X_digest_source = json.dumps({"X": X, "y": y}, sort_keys=True)
+    import hashlib
+    data_version = "sha256:" + hashlib.sha256(X_digest_source.encode("utf-8")).hexdigest()[:16]
+
+    metadata = registry.save_model(
+        clf, model_path,
+        task_name="port_scan",
+        training_data_digest=data_version,
+        config=describe_classifier(clf),
+        evaluation=metrics_payload,
+        seed=RANDOM_FOREST_BASELINE["random_state"],
+        random_seed=random_seed_for_report(),
+        samples={"total": int(total_samples), "train": int(len(y_train)), "test": int(len(y_test))},
+        limitations=SYNTHETIC_LIMITATION,
+    )
+    metadata["model_version"] = "base_model"
+    metadata["training_data_source"] = data_source
+    metadata["classes"] = [int(c) for c in list(getattr(clf, "classes_", []))]
+    registry.write_metadata(model_path, metadata)
+
+    print(f"\n[SUCCESS] Model successfully saved to:\n  {model_path}")
+    print(f"[SUCCESS] Provenance sidecar saved to:\n  {registry.metadata_path(model_path)}")
+
+    metrics_path = os.path.join(models_dir, "port_scan_rf_metrics.json")
     with open(metrics_path, mode="w", encoding="utf-8") as f:
         json.dump(metrics_payload, f, indent=2)
 
     print(f"[SUCCESS] Metrics successfully saved to:\n  {metrics_path}")
+    print("-" * 70)
+    print("LIMITATION (preserved from the research paper):")
+    print(f"  {SYNTHETIC_LIMITATION}")
     print("=" * 70)
+
+
+def random_seed_for_report() -> int:
+    """Seed used by the dataset generator, reported for reproducibility."""
+    return TRAINING_SEED
 
 
 if __name__ == "__main__":

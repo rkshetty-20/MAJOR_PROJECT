@@ -25,6 +25,24 @@ _EVALUATION_RUN_STUDIO_COLUMNS = {
     "comparison_json": "TEXT",
 }
 
+# Model-provenance columns added during the research-aligned reconstruction so a
+# trained version can be reproduced from the database row alone. All nullable, so
+# pre-existing databases upgrade additively without losing history.
+_MODEL_VERSION_PROVENANCE_COLUMNS = {
+    "model_config_json": "TEXT",
+    "random_seed": "INTEGER",
+    "feature_schema_version": "VARCHAR(32)",
+    "feature_names_json": "TEXT",
+    "training_data_version": "VARCHAR(64)",
+    "test_samples": "INTEGER",
+    "evaluation_json": "TEXT",
+    "artifact_filename": "VARCHAR(128)",
+    "promotion_state": "VARCHAR(24)",
+    "parent_version": "VARCHAR(64)",
+    "decision_reason": "TEXT",
+    "sklearn_version": "VARCHAR(32)",
+}
+
 
 def _add_missing_columns(table: str, columns: Dict[str, str]) -> None:
     inspector = inspect(engine)
@@ -53,6 +71,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _add_missing_columns("datasets", _DATASET_STUDIO_COLUMNS)
     _add_missing_columns("evaluation_runs", _EVALUATION_RUN_STUDIO_COLUMNS)
+    _add_missing_columns("model_versions", _MODEL_VERSION_PROVENANCE_COLUMNS)
 
 
 @router.post("/init", summary="Initialize database tables")

@@ -307,7 +307,15 @@ class SecurityEvent(Base):
 
 
 class ModelVersion(Base):
-    """Tracks versions of trained machine learning models for adaptive learning."""
+    """Tracks versions of trained machine learning models for adaptive learning.
+
+    The columns below record the *provenance* required to reproduce a model: the
+    hyper-parameters it was built with, the random seed, the identity of the
+    training data, the feature schema it was fitted on, where the artifact lives
+    and how it was evaluated. They are nullable so databases created before this
+    reconstruction still load; a version without provenance is reported by the
+    readiness diagnostics as unverified rather than silently trusted.
+    """
     __tablename__ = "model_versions"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -320,6 +328,24 @@ class ModelVersion(Base):
     recall = Column(Float, nullable=True)
     training_samples = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # --- Reproducibility / provenance (nullable for pre-existing rows) -------
+    # JSON: n_estimators, max_depth, min_samples_split, class name.
+    model_config_json = Column(Text, nullable=True)
+    random_seed = Column(Integer, nullable=True)
+    # Ordered feature schema the estimator was fitted on, e.g. "1.0" / "1.0_auth".
+    feature_schema_version = Column(String(32), nullable=True)
+    feature_names_json = Column(Text, nullable=True)
+    # Deterministic digest identifying the exact training set used.
+    training_data_version = Column(String(64), nullable=True)
+    test_samples = Column(Integer, nullable=True)
+    evaluation_json = Column(Text, nullable=True)
+    artifact_filename = Column(String(128), nullable=True)
+    # ACCEPTED | REJECTED | PROMOTED | ROLLED_BACK | SUPERSEDED
+    promotion_state = Column(String(24), nullable=True)
+    parent_version = Column(String(64), nullable=True)
+    decision_reason = Column(Text, nullable=True)
+    sklearn_version = Column(String(32), nullable=True)
 
 
 class LearningExample(Base):

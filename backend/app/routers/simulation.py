@@ -29,7 +29,12 @@ from app.services.simulation_service import (
     generate_offline_dataset,
     recommend_next_simulation,
 )
-from app.services.ml_engine import train_and_evaluate_model, get_adaptive_status, rollback_model
+from app.services.ml_engine import (
+    train_and_evaluate_model,
+    get_adaptive_status,
+    rollback_model,
+    get_ml_readiness,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1063,6 +1068,29 @@ def get_ml_status(
 class MLRollbackRequest(BaseModel):
     task_name: str = "port_scan"
     version_string: str
+
+
+@router.get(
+    "/api/ml/readiness",
+    status_code=status.HTTP_200_OK,
+    summary="Report which ML detectors are actually deployed and verifiable",
+)
+def api_ml_readiness(db: DBSession = Depends(get_db)) -> Dict[str, Any]:
+    """Honest capability report: artifact presence, provenance, feature contract.
+
+    Consumers must use this instead of assuming a detector is active - an absent
+    artifact and an artifact without verifiable provenance are reported as
+    distinct states.
+    """
+    try:
+        return get_ml_readiness(db)
+    except Exception as exc:
+        logger.exception("Error computing ML readiness: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to report ML readiness.",
+        )
+
 
 @router.post(
     "/api/ml/rollback",

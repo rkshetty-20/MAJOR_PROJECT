@@ -36,3 +36,36 @@ def isolated_test_db():
             os.remove(TEST_DB_PATH)
     except Exception:
         pass
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_model_store():
+    """Keep every test-run ML artifact out of the repository's model store.
+
+    The adaptive lifecycle is exercised end to end by the suite. Without this,
+    each run would drop new ``v_*.joblib`` files into ``backend/ml/models`` and
+    make the registry inventory - and therefore the readiness diagnostics that
+    report how many verified/unverified artifacts exist - depend on how often
+    the tests had previously been executed.
+
+    Only the bundled baseline artifacts are copied into the temporary store, so
+    tests still exercise a realistic "base model present, adaptive versions
+    absent" starting state.
+    """
+    import shutil
+    import tempfile
+
+    from ml import registry
+
+    real_dir = registry.MODELS_DIR
+    store = tempfile.mkdtemp(prefix="aod_ips_models_")
+    for filename in sorted(os.listdir(real_dir)):
+        if filename.startswith(("port_scan_rf.", "brute_force_rf.")):
+            shutil.copy(os.path.join(real_dir, filename), store)
+
+    registry.MODELS_DIR = store
+    try:
+        yield store
+    finally:
+        registry.MODELS_DIR = real_dir
+        shutil.rmtree(store, ignore_errors=True)

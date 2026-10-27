@@ -19,7 +19,11 @@ from app.models import (
     EvaluationRun,
 )
 from app.services.rule_engine import evaluate_rules
-from app.services.ml_engine import evaluate_ml, extract_and_store_learning_examples
+from app.services.ml_engine import (
+    evaluate_ml,
+    evaluate_ml_detailed,
+    extract_and_store_learning_examples,
+)
 from app.services.risk_engine import compute_risk_score
 
 logger = logging.getLogger(__name__)
@@ -804,8 +808,17 @@ def run_synthetic_simulation(
 
     # 4. Execute Rule and ML Detection Engines
     new_rule_detections = evaluate_rules(session_id=session_obj.id, db=db)
-    if scenario_key == "port_scan":
-        evaluate_ml(session_id=session_obj.id, db=db)
+    # ML inference is driven by measured features, never by which scenario was
+    # requested: if the session contains telemetry a model consumes, the model
+    # scores it. Diagnostics are logged so an unavailable model is visible
+    # instead of silently skipped.
+    ml_result = evaluate_ml_detailed(session_id=session_obj.id, db=db)
+    for note in ml_result["diagnostics"]:
+        if note["status"] in ("MODEL_UNAVAILABLE", "FEATURE_SCHEMA_VIOLATION", "MODEL_INTEGRITY"):
+            logger.warning(
+                "ML detector %s did not run for session %s: %s (%s)",
+                note.get("task_name"), session_obj.id, note["status"], note.get("reason"),
+            )
 
     # 5. Execute Multi-Signal Risk Engine
     risk_row = compute_risk_score(session_id=session_obj.id, db=db)
