@@ -1,11 +1,16 @@
 """IDS analysis router: expanded Intrusion Detection payload-submission API.
 
 Endpoints (all DB-free, deterministic given a seed):
-  GET  /api/ids/catalog        - attack categories + attack types
-  GET  /api/ids/presets        - one-click multi-stage simulation presets
-  GET  /api/ids/rules          - rule registry for the management panel
-  POST /api/ids/analyze        - generate + run rules + ML + fuse a result
-  POST /api/ids/preset/run     - run every stage of a preset in sequence
+  GET  /api/ids/catalog          - attack categories + attack types
+  GET  /api/ids/presets          - one-click multi-stage simulation presets
+  GET  /api/ids/rules            - rule registry for the management panel
+  GET  /api/ids/rules/summary    - registry counts derived from the code
+  POST /api/ids/analyze          - generate + run rules + ML + fuse a result
+  POST /api/ids/preset/run       - run every stage of a preset in sequence
+
+Input scope: the analysed packets are seeded synthetic/replayed telemetry.
+No authorized live-capture ingestion path exists, so no endpoint here reports or
+requires real-time traffic monitoring.
 """
 from __future__ import annotations
 
@@ -55,20 +60,34 @@ def get_presets() -> List[Dict[str, Any]]:
 
 @router.get("/rules", summary="Rule registry for the configuration panel")
 def get_rules() -> List[Dict[str, Any]]:
+    """Full per-rule contract (id, category, version, inputs, matching logic,
+    severity, weight, tunable thresholds, explanation, MITRE mapping)."""
     out = []
     for r in rules_engine.RULE_REGISTRY:
         out.append({
             "rule_id": r["rule_id"],
             "name": r["name"],
             "layer": r["layer"],
+            "category": r["category"],
+            "version": r["version"],
             "severity": r["severity"],
+            "weight": r["weight"],
             "mitre": r.get("mitre"),
             "description": r["description"],
+            "matching": r["matching"],
+            "explanation": r["explanation"],
+            "inputs": list(r["inputs"]),
             "enabled": r["enabled"],
             "tunable": r["tunable"],
             "threshold": r.get("threshold"),
         })
     return out
+
+
+@router.get("/rules/summary", summary="Registry counts derived from the implemented rules")
+def get_rules_summary() -> Dict[str, Any]:
+    """Reported counts come from ``RULE_REGISTRY`` itself, never a literal."""
+    return rules_engine.registry_summary()
 
 
 @router.post("/analyze", summary="Generate, detect and score an IDS payload")

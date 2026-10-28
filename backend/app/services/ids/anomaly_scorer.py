@@ -1,12 +1,23 @@
-"""ML anomaly-scoring engine for the IDS module.
+"""Packet feature extraction and anomaly scoring for the IDS module.
 
-Implements feature extraction over generated packets and an *ensemble* of
-complementary anomaly detectors (simulated but mathematically grounded):
+Research-aligned status (Section C of the reconstruction directive)
+-------------------------------------------------------------------
+The paper describes four statistical anomaly scorers over 14 packet features,
+"modelled on" isolation forests, autoencoders, z-scores and density clustering,
+and explicitly characterises them as *deterministic proxies rather than trained
+models*. That distinction is preserved here and exported as ``MODEL_STATUS`` so
+no caller can accidentally present these numbers as fitted ML output:
 
   * Isolation-Forest proxy   - emphasises sparse/extreme feature outliers
   * Autoencoder proxy        - reconstruction error vs a benign prototype
   * Statistical (Z-score)    - count/magnitude of features beyond baseline
   * DBSCAN / density proxy   - distance from the benign feature centroid
+
+No model fitting, no learned parameters and no training data are involved; the
+baseline in ``_NORMAL`` is a hand-declared reference range and every score is a
+closed-form function of the extracted features. Input is the seeded synthetic /
+replayed packet stream - there is no authorized live-capture path, so no
+real-time traffic monitoring is claimed.
 
 Each detector emits a 0..1 score; the ensemble fuses them, and the engine
 returns per-feature contributions, confidence, a false-positive estimate and a
@@ -17,6 +28,21 @@ from __future__ import annotations
 import math
 from collections import Counter
 from typing import Any, Dict, List
+
+MODEL_STATUS = (
+    "Deterministic statistical proxies over 14 packet features - not trained "
+    "models. Scores are reproducible closed-form functions of the declared "
+    "baseline; no fitting, no learned parameters, no live-capture input."
+)
+SCORER_NAMES = ("isolation_forest", "autoencoder", "statistical_zscore", "dbscan_density")
+
+# Ensemble weights (hand-declared, sum to 1.0) and the fixed feature list.
+ENSEMBLE_WEIGHTS = {
+    "isolation_forest": 0.30,
+    "autoencoder": 0.28,
+    "statistical_zscore": 0.22,
+    "dbscan_density": 0.20,
+}
 
 # ---------------------------------------------------------------------------
 # Benign baseline profile (reference ranges for normal traffic). Values chosen
@@ -134,7 +160,10 @@ def _feature_anomaly(name: str, value: float) -> float:
 def score_anomaly(packets: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not packets:
         return {"overall_score": 0.0, "models": {}, "features": [], "top_contributors": [],
-                "confidence": 0.5, "false_positive_probability": 0.5, "explanation": "No packets to score."}
+                "confidence": 0.5, "false_positive_probability": 0.5,
+                "model_status": MODEL_STATUS, "feature_count": len(_NORMAL),
+                "scorers": list(SCORER_NAMES),
+                "explanation": "No packets to score."}
 
     feats = extract_features(packets)
     per_feature = {name: _feature_anomaly(name, val) for name, val in feats.items()}
@@ -160,8 +189,13 @@ def score_anomaly(packets: List[Dict[str, Any]]) -> Dict[str, Any]:
         # DBSCAN density proxy: overall spread from centroid
         dbscan = min(1.0, 0.5 * mean_dev + 0.5 * (len(anomalies) / len(per_feature)))
 
-        # Ensemble: weighted (rules-independent)
-        ensemble = round(0.30 * iforest + 0.28 * autoenc + 0.22 * stat + 0.20 * dbscan, 4)
+        # Ensemble: weighted (rules-independent), weights declared once above
+        ensemble = round(sum(ENSEMBLE_WEIGHTS[name] * value for name, value in (
+            ("isolation_forest", iforest),
+            ("autoencoder", autoenc),
+            ("statistical_zscore", stat),
+            ("dbscan_density", dbscan),
+        )), 4)
     else:
         iforest = autoenc = stat = dbscan = ensemble = 0.0
 
@@ -185,6 +219,10 @@ def score_anomaly(packets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "statistical_zscore": round(stat, 4),
             "dbscan_density": round(dbscan, 4),
         },
+        "ensemble_weights": dict(ENSEMBLE_WEIGHTS),
+        "model_status": MODEL_STATUS,
+        "feature_count": len(per_feature),
+        "scorers": list(SCORER_NAMES),
         "features": contributions,
         "top_contributors": top,
         "confidence": confidence,

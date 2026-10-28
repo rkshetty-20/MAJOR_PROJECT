@@ -13,11 +13,23 @@ from typing import Any, Dict, List, Optional
 from app.services.ids.anomaly_scorer import score_anomaly
 from app.services.ids.attack_catalog import get_attack
 from app.services.ids.packet_generator import generate_packets
-from app.services.ids.rules_engine import SEVERITY_RANK, run_rules
+from app.services.ids.rules_engine import SEVERITY_RANK, registry_summary, run_rules
 
 VERDICT_CLEAN = "Clean"
 VERDICT_SUSPICIOUS = "Suspicious"
 VERDICT_MALICIOUS = "Malicious"
+
+# Honest description of where the analysed bytes come from. No authorized
+# live-interface capture exists, so nothing here may be reported as real-time
+# traffic monitoring.
+PIPELINE_PROVENANCE = {
+    "input_source": "seeded synthetic packet generator (deterministic replay)",
+    "live_traffic_capture": False,
+    "live_traffic_claim": (
+        "Not claimed: no authorized live ingestion path is implemented or "
+        "tested; the pipeline analyses generated/replayed telemetry only."
+    ),
+}
 
 # Sensitivity (0.0 conservative .. 1.0 aggressive) shifts verdict thresholds.
 _BASE_THRESHOLDS = {"clean_max": 34, "suspicious_max": 62}
@@ -101,8 +113,15 @@ def analyze_payload(
             "triggered_count": len(rules["triggered"]),
             "triggered": rules["triggered"],
             "evaluated": rules["evaluated"],
+            "evaluated_count": len(rules["evaluated"]),
+            "registry_size": rules["registry_size"],
+            "registry": registry_summary(),
+            "ruleset_version": rules["ruleset_version"],
+            "accepted_packets": rules["accepted_count"],
+            "skipped_packets": rules["skipped"],
         },
         "ml": ml,
+        "pipeline": PIPELINE_PROVENANCE,
         "kill_chain": _kill_chain(attack["kill_chain_stage"]),
         "mitre": mitre,
         "packets": packets,

@@ -155,6 +155,10 @@ export const RuleManagementPanel: React.FC<RuleManagementPanelProps> = ({
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold text-ink truncate">{r.name}</span>
                           <SeverityBadge severity={r.severity} />
+                          <Tooltip label={`Matching: ${r.matching}`} />
+                        </div>
+                        <div className="text-[10px] font-mono text-ink-faint mt-0.5 truncate">
+                          {r.rule_id} · v{r.version} · weight {r.weight} · inputs {r.inputs.length}
                         </div>
                         <p className="text-[11px] text-ink-faint mt-0.5 line-clamp-2">{r.description}</p>
                         {r.tunable && r.threshold && (

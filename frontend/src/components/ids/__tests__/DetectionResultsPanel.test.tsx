@@ -11,28 +11,53 @@ const analysis: IdsAnalysis = {
   rules: {
     triggered_count: 1,
     evaluated: ['r1', 'r2', 'r3'],
+    evaluated_count: 3,
+    registry_size: 3,
+    ruleset_version: '1.0.0',
+    accepted_packets: 60,
+    skipped_packets: [],
     triggered: [
       {
         rule_id: 'THR-1',
         name: 'SYN Rate Exceeded',
         layer: 'threshold',
+        category: 'threshold',
+        version: '1.0.0',
         severity: 'high',
         mitre: 'T1498.001',
         confidence: 0.82,
         detail: '42 SYN packets/sec from a single source.',
+        explanation: 'Arrival rate from 192.0.2.10 exceeded the SYN ceiling (42 packets/sec).',
+        inputs_used: ['index', 'unix_ts', 'src_ip', 'flags'],
         matched_packets: [1, 2, 3],
         weight: 3,
+        evidence: [
+          {
+            type: 'packet', packet_index: 1, timestamp: '2026-10-27T10:00:00+00:00',
+            src_ip: '192.0.2.10', dst_ip: '198.51.100.20', dst_port: 80, protocol: 'TCP',
+            flags: 'SYN', size: 52, ttl: 64, payload_preview: '',
+          },
+        ],
       },
     ],
   },
   ml: {
     overall_score: 0.71,
     models: { isolation_forest: 0.42, autoencoder: 0.3 },
+    ensemble_weights: { isolation_forest: 0.3, autoencoder: 0.28 },
     features: [],
     top_contributors: [],
     confidence: 0.8,
     false_positive_probability: 0.12,
     explanation: 'Traffic deviates from baseline arrival rate.',
+    model_status: 'Deterministic statistical proxies over 14 packet features - not trained models.',
+    feature_count: 14,
+    scorers: ['isolation_forest', 'autoencoder', 'statistical_zscore', 'dbscan_density'],
+  },
+  pipeline: {
+    input_source: 'seeded synthetic packet generator (deterministic replay)',
+    live_traffic_capture: false,
+    live_traffic_claim: 'Not claimed: no authorized live ingestion path is implemented or tested.',
   },
   kill_chain: {
     current: 'exploitation',
@@ -71,7 +96,30 @@ describe('DetectionResultsPanel (Phase 5)', () => {
     expect(screen.getByText('Isolation Forest')).toBeInTheDocument();
 
     // Section headings render via the shared Card.
-    expect(screen.getByRole('heading', { name: 'ML Anomaly Breakdown' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Anomaly Score Breakdown' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Triggered Rules \(1\)/ })).toBeInTheDocument();
+  });
+
+  it('shows which registry rules were evaluated, and the version of the one that fired', () => {
+    render(<DetectionResultsPanel analysis={analysis} />);
+    expect(screen.getByText('3/3 rules evaluated · v1.0.0')).toBeInTheDocument();
+    expect(screen.getByText('THR-1 · v1.0.0')).toBeInTheDocument();
+  });
+
+  it('renders the detection explanation together with its packet evidence', () => {
+    render(<DetectionResultsPanel analysis={analysis} />);
+    expect(
+      screen.getByText(/Arrival rate from 192\.0\.2\.10 exceeded the SYN ceiling/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Evidence: 3 packets \(1, 2, 3\)/)).toBeInTheDocument();
+  });
+
+  it('never presents the anomaly proxies as trained models', () => {
+    render(<DetectionResultsPanel analysis={analysis} />);
+    expect(screen.getByText('Anomaly Proxies')).toBeInTheDocument();
+    expect(
+      screen.getByText('Deterministic statistical proxies over 14 packet features - not trained models.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/no authorized live ingestion path/)).toBeInTheDocument();
   });
 });

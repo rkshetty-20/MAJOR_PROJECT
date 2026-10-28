@@ -92,7 +92,12 @@ export const DetectionResultsPanel: React.FC<{ analysis: IdsAnalysis }> = ({ ana
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Triggered rules */}
-        <Card title={`Triggered Rules (${rules.triggered_count})`} icon={<ShieldAlert className="w-4 h-4" />}>
+        <Card title={`Triggered Rules (${rules.triggered_count})`} icon={<ShieldAlert className="w-4 h-4" />}
+          right={rules.registry_size ? (
+            <span className="text-[11px] text-ink-muted font-mono">
+              {rules.evaluated.length}/{rules.registry_size} rules evaluated · v{rules.ruleset_version}
+            </span>
+          ) : undefined}>
           {rules.triggered.length === 0 ? (
             <EmptyNote text="No signature, threshold or stateful rules fired for this traffic." />
           ) : (
@@ -112,7 +117,22 @@ export const DetectionResultsPanel: React.FC<{ analysis: IdsAnalysis }> = ({ ana
                             {r.layer}
                           </span>
                         </div>
+                        <div className="text-[10px] font-mono text-ink-faint mt-0.5">
+                          {r.rule_id}{r.version ? ` · v${r.version}` : ''}
+                        </div>
                         <p className="text-[11px] text-ink-muted mt-0.5">{r.detail}</p>
+                        {(r.explanation || r.evidence?.length) && (
+                          <p className="text-[11px] text-ink-soft mt-1 leading-relaxed">
+                            {r.explanation}
+                            {r.evidence?.length > 0 && (
+                              <span className="text-ink-faint">
+                                {' '}Evidence: {r.matched_packets.length} packet{r.matched_packets.length === 1 ? '' : 's'} (
+                                {r.matched_packets.slice(0, 5).join(', ')}
+                                {r.matched_packets.length > 5 ? ', …' : ''}) captured in the packet view.
+                              </span>
+                            )}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -151,13 +171,24 @@ export const DetectionResultsPanel: React.FC<{ analysis: IdsAnalysis }> = ({ ana
         </Card>
       </div>
 
-      {/* ML breakdown */}
-      <Card title="ML Anomaly Breakdown" icon={<Boxes className="w-4 h-4" />}>
+      {/* Anomaly breakdown - deterministic proxies, explicitly not trained models */}
+      <Card title="Anomaly Score Breakdown" icon={<Boxes className="w-4 h-4" />}>
+        {analysis.pipeline && (
+          <div className="mb-4 rounded-lg border border-line bg-app/40 px-3 py-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+              Input scope
+            </div>
+            <p className="text-[11px] text-ink-muted leading-relaxed">
+              {analysis.pipeline.live_traffic_claim} Source: {analysis.pipeline.input_source}.
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted mb-2 flex items-center gap-1.5">
-                Ensemble Models <Tooltip label="Weighted combination of four anomaly-detection proxies." />
+                Anomaly Proxies{' '}
+                <Tooltip label="Four deterministic statistical proxies, weighted and combined. They are modelled on isolation forests, autoencoders, z-scores and density clustering - they are not trained models." />
               </div>
               <div className="space-y-2.5">
                 {Object.entries(ml.models).map(([key, val]) => (
@@ -171,6 +202,14 @@ export const DetectionResultsPanel: React.FC<{ analysis: IdsAnalysis }> = ({ ana
                 ))}
               </div>
             </div>
+            {ml.model_status && (
+              <div className="rounded-lg border border-line bg-app/40 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+                  Model status{ml.feature_count ? ` - ${ml.feature_count} packet features` : ''}
+                </div>
+                <p className="text-[11px] text-ink-muted leading-relaxed">{ml.model_status}</p>
+              </div>
+            )}
             <div className="rounded-lg border border-accent/20 bg-accent/5 p-3">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-accent-soft mb-1">Explanation</div>
               <p className="text-xs text-ink-soft leading-relaxed">{ml.explanation}</p>

@@ -27,28 +27,80 @@ export interface CatalogCategory {
   attacks: CatalogAttack[];
 }
 
+export interface DetectionEvidence {
+  type: 'packet';
+  packet_index: number;
+  timestamp: string;
+  src_ip: string;
+  dst_ip: string;
+  dst_port: number;
+  protocol: string;
+  flags: string;
+  size: number;
+  ttl: number;
+  payload_preview: string;
+}
+
 export interface TriggeredRule {
   rule_id: string;
   name: string;
   layer: 'signature' | 'threshold' | 'stateful';
+  category: 'signature' | 'threshold' | 'stateful';
+  version: string;
   severity: Severity;
+  weight: number;
   mitre?: string | null;
   confidence: number;
   detail: string;
+  explanation: string;
+  inputs_used: string[];
   matched_packets: number[];
-  weight: number;
+  evidence: DetectionEvidence[];
 }
 
 export interface RuleMeta {
   rule_id: string;
   name: string;
   layer: 'signature' | 'threshold' | 'stateful';
+  category: 'signature' | 'threshold' | 'stateful';
+  version: string;
   severity: Severity;
+  weight: number;
   mitre?: string | null;
   description: string;
+  matching: string;
+  explanation: string;
+  inputs: string[];
   enabled: boolean;
   tunable: boolean;
   threshold?: Record<string, number> | null;
+}
+
+// Counts reported by GET /api/ids/rules/summary; derived from the registry code,
+// never hardcoded in the UI.
+export interface RegistrySummary {
+  ruleset_version: string;
+  total: number;
+  layers: Record<'signature' | 'threshold' | 'stateful', number>;
+  enabled: number;
+  tunable: number;
+  with_mitre_mapping: number;
+  severities: Record<Severity, number>;
+  input_scope: string;
+}
+
+export interface SkippedPacket {
+  position: number;
+  index: number | null;
+  reason: string;
+}
+
+// Machine-readable statement of where the analysed bytes came from. The project
+// has no authorized live capture path, so this must stay visible in the UI.
+export interface PipelineProvenance {
+  input_source: string;
+  live_traffic_capture: false;
+  live_traffic_claim: string;
 }
 
 export interface MlFeatureContribution {
@@ -61,11 +113,17 @@ export interface MlFeatureContribution {
 export interface MlBreakdown {
   overall_score: number;
   models: Record<string, number>;
+  ensemble_weights?: Record<string, number>;
   features: MlFeatureContribution[];
   top_contributors: MlFeatureContribution[];
   confidence: number;
   false_positive_probability: number;
   explanation: string;
+  // These four scorers are deterministic statistical proxies, NOT trained
+  // models; the text is emitted by the backend and must be shown verbatim.
+  model_status?: string;
+  feature_count?: number;
+  scorers?: string[];
 }
 
 export interface PacketRecord {
@@ -114,8 +172,19 @@ export interface IdsAnalysis {
   attack: { id: string; name: string; category: string; description: string; severity: Severity };
   generation: { volume: Volume; seed: number | null; packet_count: number };
   verdict: { label: VerdictLabel; threat_score: number; rule_score: number; ml_score: number };
-  rules: { triggered_count: number; triggered: TriggeredRule[]; evaluated: string[] };
+  rules: {
+    triggered_count: number;
+    triggered: TriggeredRule[];
+    evaluated: string[];
+    evaluated_count?: number;
+    registry_size?: number;
+    registry?: RegistrySummary;
+    ruleset_version?: string;
+    accepted_packets?: number;
+    skipped_packets?: SkippedPacket[];
+  };
   ml: MlBreakdown;
+  pipeline?: PipelineProvenance;
   kill_chain: { current: string; current_label: string; index: number; stages: KillChainStage[] };
   mitre: MitreMapping[];
   packets: PacketRecord[];
@@ -159,4 +228,5 @@ export interface AnalyzeRequest {
   seed?: number | null;
   sensitivity: number;
   rule_enabled?: Record<string, boolean>;
+  rule_overrides?: Record<string, { enabled?: boolean; threshold?: Record<string, number> }>;
 }
