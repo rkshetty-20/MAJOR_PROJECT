@@ -40,9 +40,15 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 BEHAVIORAL_DEFAULTS: Dict[str, float] = {
     "failed_login_burst": 3,            # failures that establish a brute-force pattern
     "sustained_failures": 4,            # failures with no success => sustained attack
-    # Repeated-failed-login rule fires on the behaviour (a burst of invalid
-    # credentials), not on the dataset label. 5 matches the documented velocity
-    # threshold carried in the generated telemetry payload.
+    # --- Implementation extension, NOT one of the paper's nine rules ---------
+    # Paper Table I gives exactly one rule for repeated failures: "Multiple failed
+    # logins - >=4 failures with no later success (0.85)", implemented below as
+    # ``sustained_attack_no_compromise``. This second, velocity-scoped label
+    # (5 failures from one source to one account inside a 300 s window, 0.88) is an
+    # additional corroborating rule added by the implementation. Its threshold and
+    # confidence are therefore engineering values, not reported results; it is
+    # listed as an extension in REQUIREMENTS_TRACEABILITY.md and it contributes an
+    # extra distinct label to the risk engine's multi-signal term ``m``.
     "repeated_failures": 5,
     "repeated_failures_window_seconds": 300.0,
     "credential_stuffing_accounts": 3,  # distinct accounts targeted from one source
@@ -59,6 +65,38 @@ BEHAVIORAL_DEFAULTS: Dict[str, float] = {
         "marketing_lead": {"normal_window_start": 9, "normal_window_end": 18},
     },
 }
+
+#: Paper Table I, column "rule confidence". Every behavioural detection reads its
+#: confidence from this table instead of a literal, so the nine reported values are
+#: data that a test can check (``test_rule_engine_confidences_match_paper_table``).
+#: ``phishing_url_detected`` is the exception the paper marks as "dynamic": its
+#: confidence is the lexical scorer's own score.
+RULE_CONFIDENCES: Dict[str, Optional[float]] = {
+    "brute_force_detected": 0.95,
+    "sustained_attack_no_compromise": 0.85,   # paper row: Multiple failed logins
+    "credential_stuffing_detected": 0.96,
+    "suspicious_login_detected": 0.90,
+    "impossible_travel_detected": 0.98,
+    "new_device_detected": 0.85,
+    "phishing_url_detected": None,            # dynamic (lexical scorer)
+    "port_scan_detected": 1.00,
+    "anomalous_login_time_detected": 0.80,
+    # Implementation extension - not in Table I, see BEHAVIORAL_DEFAULTS above.
+    "multiple_failed_logins_detected": 0.88,
+}
+
+#: The nine labels that correspond one-to-one to the rows of paper Table I.
+PAPER_RULE_LABELS: tuple = (
+    "brute_force_detected",
+    "credential_stuffing_detected",
+    "suspicious_login_detected",
+    "impossible_travel_detected",
+    "new_device_detected",
+    "phishing_url_detected",
+    "port_scan_detected",
+    "anomalous_login_time_detected",
+    "sustained_attack_no_compromise",
+)
 
 # Legacy override keys used by the seeded scenario catalogue in
 # ``app/routers/scenarios.py`` map onto the canonical registry names above, so an
@@ -230,7 +268,7 @@ def _evaluate_port_scan(
                     session_id=session_id,
                     source=DetectionSource.RULE,
                     label=rule_label,
-                    confidence=1.0,
+                    confidence=RULE_CONFIDENCES[rule_label],
                     explanation=explanation,
                     features=features_json,
                     timestamp=datetime.now(timezone.utc),
@@ -360,7 +398,7 @@ def _evaluate_security_events(
                 _add_detection(
                     "brute_force_detected",
                     f"High-velocity authentication failure burst: {failed} failed login attempts from {src} targeting {target}, followed by a successful login",
-                    confidence=0.95,
+                    confidence=RULE_CONFIDENCES["brute_force_detected"],
                     correlated_events=corr
                 )
                 compromised = True
@@ -371,7 +409,7 @@ def _evaluate_security_events(
             _add_detection(
                 "sustained_attack_no_compromise",
                 f"Sustained authentication failures: {failed} failed login attempts from {src} targeting {target} with no successful login",
-                confidence=0.85,
+                confidence=RULE_CONFIDENCES["sustained_attack_no_compromise"],
                 correlated_events=corr
             )
 
@@ -401,7 +439,7 @@ def _evaluate_security_events(
                 _add_detection(
                     "credential_stuffing_detected",
                     f"Credential stuffing detected: {src} attempted authentication against {len(unique_targets)} distinct accounts within {int(stuff_window)} seconds",
-                    confidence=0.96,
+                    confidence=RULE_CONFIDENCES["credential_stuffing_detected"],
                     correlated_events=corr
                 )
                 break  # Already generated for this source
@@ -441,7 +479,7 @@ def _evaluate_security_events(
                 _add_detection(
                     "suspicious_login_detected",
                     f"Suspicious login detected for {target}: authentication from {loc} using previously unseen device {dev_id}",
-                    confidence=0.90,
+                    confidence=RULE_CONFIDENCES["suspicious_login_detected"],
                     correlated_events=corr
                 )
 
@@ -482,7 +520,7 @@ def _evaluate_security_events(
                         _add_detection(
                             "impossible_travel_detected",
                             f"Calculated {distance_km:.0f}km in {interval_minutes:.0f}min = {speed_kmh:.0f}km/h, exceeding plausible travel speed",
-                            confidence=0.98,
+                            confidence=RULE_CONFIDENCES["impossible_travel_detected"],
                             correlated_events=corr
                         )
 
@@ -505,7 +543,7 @@ def _evaluate_security_events(
                     _add_detection(
                         "new_device_detected",
                         f"Unrecognized endpoint hardware fingerprint: {dev_id} utilized for the first time by {target}",
-                        confidence=0.85,
+                        confidence=RULE_CONFIDENCES["new_device_detected"],
                         correlated_events=corr
                     )
 
@@ -563,7 +601,7 @@ def _evaluate_security_events(
             _add_detection(
                 "anomalous_login_time_detected",
                 f"Anomalous login time: {ev.target or 'unknown'} authenticated at {hour}:00, which is {deviation} hours outside their normal working window ({start}:00 - {end}:00)",
-                confidence=0.80,
+                confidence=RULE_CONFIDENCES["anomalous_login_time_detected"],
                 correlated_events=corr
             )
 
@@ -599,7 +637,7 @@ def _evaluate_security_events(
                 _add_detection(
                     "multiple_failed_logins_detected",
                     f"Multiple failed login threshold exceeded: {len(window_events)} failed attempts from {pair[0]} targeting {pair[1]} within {span:.0f}s (threshold {mfl_count} in {mfl_window:.0f}s)",
-                    confidence=0.88,
+                    confidence=RULE_CONFIDENCES["multiple_failed_logins_detected"],
                     correlated_events=corr
                 )
                 break

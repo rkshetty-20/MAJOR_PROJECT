@@ -184,17 +184,25 @@ def test_hybrid_risk_fusion():
         print("\n--- CASE (c): BOTH RULE AND ML AGREEING (HYBRID) ---")
         print(f"  Score: {risk_c.score} ({risk_c.band.value})")
         print(f"  Contributing Factors: {factors_c}")
-        # Paper formula: terms are summed, never suppressed.
-        #   r=40, m=0 (one distinct label), c=0.95*40=38, a=10, s=(4-2)/3*10=6.667
-        #   S = round(clamp(94.667, 0, 100)) = 95
-        assert factors_c["rule_detected"] == 40
-        assert factors_c["ml_confidence_term"] == 38, (
-            "Agreement must not zero the ML term - the paper sums r + m + c + a + s"
+        # Paper Section IV-E: "When rule and ML agree, only the larger of r and c
+        # is kept to avoid double counting." r=40 > c=38, so the ML term is
+        # suppressed and the rule term is counted once.
+        #   r=40, m=0 (one distinct label), c=0 (suppressed), a=10, s=(4-2)/3*10=6.667
+        #   S = round(clamp(56.667, 0, 100)) = 57 (MEDIUM)
+        assert factors_c["rule_detected"] == 40, (
+            "the larger of r and c must survive the de-duplication"
         )
+        assert factors_c["ml_confidence_term"] == 0, (
+            "the smaller of r and c must be suppressed, not summed"
+        )
+        assert factors_c["terms_pre_suppression"] == {"r": 40.0, "c": 38.0}
+        assert factors_c["double_counting_suppression"]["applied"] is True
+        assert factors_c["double_counting_suppression"]["kept"] == "r"
+        assert factors_c["double_counting_suppression"]["suppressed"] == "c"
         assert factors_c["agreement_bonus"] == 10
         assert factors_c["terms"]["s"] == round(20.0 / 3.0, 4)
-        assert factors_c["raw_total"] == round(40 + 38 + 10 + 20.0 / 3.0, 4)
-        assert risk_c.score == 95
+        assert factors_c["raw_total"] == round(40 + 10 + 20.0 / 3.0, 4)
+        assert risk_c.score == 57
         assert "port_scan_detected" in factors_c["agreed_labels"]
 
         # ---------------------------------------------------------
@@ -291,12 +299,15 @@ def test_risk_boundaries_and_bonuses():
         db.commit()
         r_max = compute_risk_score(sess_max.id, db)
         factors_max = json.loads(r_max.contributing_factors)
-        # Paper formula saturates: r=40 + m=min(30,15*3)=30 + c=1.0*40=40 + a=10
-        #   + s=(4-1)/3*10=10  =>  raw 130 => clamp => 100
-        assert factors_max["raw_total"] == 130.0
-        assert factors_max["clamped"] is True
-        assert r_max.score == 100
+        # Paper Section IV-E keeps only the larger of r and c when they agree:
+        #   max(r=40, c=40) + m=min(30,15*3)=30 + a=10 + s=(4-1)/3*10=10 = 90
+        # The score is therefore NOT clamped, and only an agreeing rule+ML session
+        # can reach the CRITICAL band.
+        assert factors_max["raw_total"] == 90.0
+        assert factors_max["clamped"] is False
+        assert r_max.score == 90
         assert r_max.band == RiskBand.CRITICAL
+        assert factors_max["double_counting_suppression"]["suppressed_amount"] == 40.0
 
         # 3. Minimum score does not fall below 0
         sess_min = create_sess("min_score")
@@ -453,7 +464,7 @@ def test_paper_formula_term_semantics():
         assert factors["ml_highest_confidence"] == 0.8
         assert factors["ml_detection_count"] == 3
 
-        # --- Agreement with ML only for a repeated label set (no suppression) ---
+        # --- Agreement suppresses the smaller of r and c (paper Section IV-E) ---
         sess = _make_session(db, scenario, "agree_multi", created)
         db.add_all([
             Detection(session_id=sess.id, source=DetectionSource.RULE, label="A", confidence=1.0, timestamp=now),
@@ -465,10 +476,10 @@ def test_paper_formula_term_semantics():
         db.commit()
         risk = compute_risk_score(sess.id, db)
         factors = json.loads(risk.contributing_factors)
-        # r=40 m=15 c=30 a=10 s=6.6667 -> 101.6667 -> clamped 100
-        assert factors["terms"] == {"r": 40.0, "m": 15.0, "c": 30.0, "a": 10.0,
+        # max(r=40, c=30)=40, m=15 (two distinct labels), a=10, s=6.6667 -> 71.6667
+        assert factors["terms"] == {"r": 40.0, "m": 15.0, "c": 0.0, "a": 10.0,
                                    "s": round(20.0 / 3.0, 4)}
-        assert factors["clamped"] is True and risk.score == 100
+        assert factors["clamped"] is False and risk.score == 72
         assert factors["agreed_labels"] == ["A"]
 
         # --- Recomputation is deterministic and idempotent for identical evidence ---
@@ -478,6 +489,82 @@ def test_paper_formula_term_semantics():
         assert db.query(RiskScore).filter(RiskScore.session_id == sess.id).count() == 1
 
         print("  [OK] Paper formula term semantics verified.")
+    finally:
+        for sid in created:
+            db.query(RiskScore).filter(RiskScore.session_id == sid).delete()
+            db.query(Detection).filter(Detection.session_id == sid).delete()
+            db.query(SuricataEvent).filter(SuricataEvent.session_id == sid).delete()
+            db.query(SecurityEvent).filter(SecurityEvent.session_id == sid).delete()
+            db.query(SessionModel).filter(SessionModel.id == sid).delete()
+        db.commit()
+        db.close()
+
+
+def test_paper_double_counting_boundaries():
+    """The two score bounds the paper states in Section V-A.
+
+    Paper Fig. 6: "an agreeing port-scan detection with the maximum severity term
+    would reach 60, the lowest HIGH score".
+    Paper Section V-A: "rule-only sessions cannot exceed 80: CRITICAL requires
+    rule-ML agreement".
+    Both are direct consequences of Section IV-E ("only the larger of r and c is
+    kept"), so they are asserted here as regression tests.
+    """
+    db = SessionLocal()
+    created = []
+    try:
+        seed_scenarios(db)
+        scenario = db.query(Scenario).filter(Scenario.category == ScenarioCategory.PORT_SCAN).first()
+        now = datetime.now(timezone.utc)
+
+        # 1. Agreeing port scan, highest ML confidence, worst severity -> 60 (HIGH).
+        sess = _make_session(db, scenario, "paper_agreeing_port_scan", created)
+        db.add_all([
+            Detection(session_id=sess.id, source=DetectionSource.RULE,
+                      label="port_scan_detected", confidence=1.0, timestamp=now),
+            Detection(session_id=sess.id, source=DetectionSource.ML,
+                      label="port_scan_detected", confidence=1.0, timestamp=now),
+            SuricataEvent(session_id=sess.id, raw_signature="ET SCAN", src_ip="198.51.100.7",
+                          dest_ip="192.0.2.11", dest_port=22, protocol="TCP", severity=1, timestamp=now),
+        ])
+        db.commit()
+        risk = compute_risk_score(sess.id, db)
+        assert risk.score == 60, f"paper Fig. 6 expects 60, got {risk.score}"
+        assert risk.band == RiskBand.HIGH
+
+        # 2. Rule-only ceiling: r=40 + m=30 + s=10 = 80, never CRITICAL.
+        sess = _make_session(db, scenario, "paper_rule_only_ceiling", created)
+        db.add_all([
+            Detection(session_id=sess.id, source=DetectionSource.RULE,
+                      label=f"rule_{i}", confidence=1.0, timestamp=now)
+            for i in range(4)
+        ] + [
+            SuricataEvent(session_id=sess.id, raw_signature="ET SCAN", src_ip="198.51.100.8",
+                          dest_ip="192.0.2.12", dest_port=443, protocol="TCP", severity=1, timestamp=now),
+        ])
+        db.commit()
+        risk = compute_risk_score(sess.id, db)
+        assert risk.score == 80, f"rule-only ceiling is 80, got {risk.score}"
+        assert risk.band == RiskBand.HIGH
+
+        # 3. When the ML term is the larger one, the RULE term is the suppressed one.
+        sess = _make_session(db, scenario, "paper_ml_dominant", created)
+        db.add_all([
+            Detection(session_id=sess.id, source=DetectionSource.RULE,
+                      label="port_scan_detected", confidence=1.0, timestamp=now),
+            Detection(session_id=sess.id, source=DetectionSource.ML,
+                      label="port_scan_detected", confidence=1.0, timestamp=now),
+            Detection(session_id=sess.id, source=DetectionSource.RULE,
+                      label="secondary_rule", confidence=1.0, timestamp=now),
+        ])
+        db.commit()
+        factors = json.loads(compute_risk_score(sess.id, db).contributing_factors)
+        # max(r=40, c=40) keeps r (ties keep r); m=15 for two labels; a=10; s=0 (no events)
+        assert factors["double_counting_suppression"]["kept"] == "r"
+        assert factors["double_counting_suppression"]["suppressed"] == "c"
+        assert factors["raw_total"] == 65.0
+
+        print("  [OK] Paper double-counting bounds (60 / 80) verified.")
     finally:
         for sid in created:
             db.query(RiskScore).filter(RiskScore.session_id == sid).delete()
@@ -529,5 +616,6 @@ if __name__ == "__main__":
     test_risk_boundaries_and_bonuses()
     test_pure_severity_term()
     test_paper_formula_term_semantics()
+    test_paper_double_counting_boundaries()
     test_severity_fallback_from_security_events()
     print("\nALL RISK FUSION ENGINE TESTS PASSED!")

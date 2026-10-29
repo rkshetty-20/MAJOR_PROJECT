@@ -19,6 +19,8 @@ from app.models import (
 from app.routers.scenarios import seed_scenarios
 from app.services.rule_engine import (
     BEHAVIORAL_DEFAULTS,
+    PAPER_RULE_LABELS,
+    RULE_CONFIDENCES,
     _establishes_baseline,
     _is_failure,
     _is_success,
@@ -29,6 +31,36 @@ from app.services.rule_engine import (
 from app.database import Base, engine
 
 Base.metadata.create_all(bind=engine)
+
+
+def test_rule_engine_confidences_match_paper_table():
+    """Paper Table I: nine behavioural rules, each with a reported confidence.
+
+    The nine values are declared once in ``RULE_CONFIDENCES`` and read by every
+    rule, so this test is the machine-checkable link between the paper's table and
+    the verdicts the engine emits. The tenth label is the documented extension.
+    """
+    assert len(PAPER_RULE_LABELS) == 9, "the paper specifies nine behavioural rules"
+
+    expected = {
+        "brute_force_detected": 0.95,
+        "credential_stuffing_detected": 0.96,
+        "suspicious_login_detected": 0.90,
+        "impossible_travel_detected": 0.98,
+        "new_device_detected": 0.85,
+        "phishing_url_detected": None,   # paper column reads "(dynamic)"
+        "port_scan_detected": 1.00,
+        "anomalous_login_time_detected": 0.80,
+        "sustained_attack_no_compromise": 0.85,
+    }
+    assert set(PAPER_RULE_LABELS) == set(expected)
+    for label, confidence in expected.items():
+        assert RULE_CONFIDENCES[label] == confidence, label
+
+    # The velocity-scoped repeat rule is an implementation extension: it is
+    # declared, it is NOT one of the paper's nine, and its 0.88 is engineering data.
+    assert "multiple_failed_logins_detected" not in PAPER_RULE_LABELS
+    assert RULE_CONFIDENCES["multiple_failed_logins_detected"] == 0.88
 
 
 def test_port_scan_rule_detection():

@@ -106,10 +106,18 @@ def compute_risk_score(session_id: int, db: Session) -> RiskScore:
          _severity_term), with the documented fallback when a session has no
          Suricata events.
 
-    NOTE ON DOUBLE COUNTING: the paper sums all five terms directly; the
-    agreement bonus `a` is the ONLY mechanism the paper permits for recognising
-    rule/ML concurrence. Terms are therefore never suppressed, zeroed or
-    max-replaced against one another.
+    DOUBLE-COUNTING RULE (quoted verbatim from the paper, Section IV-E):
+    "When rule and ML agree, only the larger of r and c is kept to avoid double
+    counting." The implementation therefore replaces (r, c) by max(r, c) for the
+    total whenever at least one label is produced by BOTH the rule engine and the
+    ML model, while the agreement bonus `a` is still added on top. Both raw terms
+    are persisted in ``terms_pre_suppression`` so the suppression stays auditable.
+
+    Two consequences reported in the paper follow from this rule and are asserted
+    by ``backend/tests/test_risk_engine.py``: an agreeing port-scan detection at
+    maximum severity scores exactly 60 (the lowest HIGH band, paper Fig. 6), and a
+    rule-only session cannot exceed 40 + 30 + 10 = 80, so CRITICAL requires
+    rule-ML agreement.
 
     Bands:
       - 0-29:   low
@@ -158,10 +166,28 @@ def compute_risk_score(session_id: int, db: Session) -> RiskScore:
     ml_confidence_term = highest_ml_conf * 40.0
 
     # --- Term 4: Agreement a = 10 when a rule label and an ML label coincide ---
-    # Per the paper this is purely additive: `r` and `c` are NOT suppressed here.
     ml_labels: Set[str] = {d.label for d in ml_detections if d.label}
     agreed_labels: Set[str] = rule_labels.intersection(ml_labels)
     agreement_bonus = 10.0 if len(agreed_labels) > 0 else 0.0
+
+    # --- Paper Section IV-E: "When rule and ML agree, only the larger of r and c
+    # is kept to avoid double counting." The same evidence is then counted once.
+    if agreed_labels:
+        if rule_term >= ml_confidence_term:
+            rule_term_effective = rule_term
+            ml_term_effective = 0.0
+            kept_term, suppressed_term = "r", "c"
+            suppressed_amount = ml_confidence_term
+        else:
+            rule_term_effective = 0.0
+            ml_term_effective = ml_confidence_term
+            kept_term, suppressed_term = "c", "r"
+            suppressed_amount = rule_term
+    else:
+        rule_term_effective = rule_term
+        ml_term_effective = ml_confidence_term
+        kept_term, suppressed_term = None, None
+        suppressed_amount = 0.0
 
     # --- Term 5: Severity contribution s (Suricata first, documented fallback) ---
     events: List[SuricataEvent] = (
@@ -176,8 +202,14 @@ def compute_risk_score(session_id: int, db: Session) -> RiskScore:
     )
     severity_term, avg_sev, severity_source = _severity_term(events, sec_events)
 
-    # --- S = round(clamp(r + m + c + a + s, 0, 100)) ---
-    raw_total = rule_term + multi_signal_bonus + ml_confidence_term + agreement_bonus + severity_term
+    # --- S = round(clamp(r + m + c + a + s, 0, 100)), r/c already de-duplicated ---
+    raw_total = (
+        rule_term_effective
+        + multi_signal_bonus
+        + ml_term_effective
+        + agreement_bonus
+        + severity_term
+    )
     final_score = int(round(max(0.0, min(100.0, raw_total))))
     clamped = raw_total < 0.0 or raw_total > 100.0
 
@@ -187,21 +219,39 @@ def compute_risk_score(session_id: int, db: Session) -> RiskScore:
     # --- Transparent breakdown of every term ---
     contributing_factors: Dict[str, Any] = {
         "formula": "S = round(clamp(r + m + c + a + s, 0, 100))",
+        # Effective (de-duplicated) decomposition used by the UI waterfall. The
+        # five values below sum exactly to raw_total.
         "terms": {
-            "r": round(rule_term, 4),
+            "r": round(rule_term_effective, 4),
             "m": round(multi_signal_bonus, 4),
-            "c": round(ml_confidence_term, 4),
+            "c": round(ml_term_effective, 4),
             "a": round(agreement_bonus, 4),
             "s": round(severity_term, 4),
+        },
+        # Raw terms before the paper's max(r, c) rule, kept for auditability.
+        "terms_pre_suppression": {
+            "r": round(rule_term, 4),
+            "c": round(ml_confidence_term, 4),
+        },
+        "double_counting_suppression": {
+            "applied": suppressed_term is not None,
+            "rule": "paper section IV-E: keep only the larger of r and c when rule and ML agree",
+            "kept": kept_term,
+            "suppressed": suppressed_term,
+            "suppressed_amount": round(suppressed_amount, 4),
         },
         "raw_total": round(raw_total, 4),
         "clamped": clamped,
         # Legacy integer keys retained for existing API consumers / UI cards.
-        "rule_detected": int(round(rule_term)),
+        # They carry the EFFECTIVE term values so an operator adding the cards up
+        # arrives at the persisted score instead of a double-counted total.
+        "rule_detected": int(round(rule_term_effective)),
         "multi_signal_bonus": int(round(multi_signal_bonus)),
-        "ml_confidence_term": int(round(ml_confidence_term)),
+        "ml_confidence_term": int(round(ml_term_effective)),
         "agreement_bonus": int(round(agreement_bonus)),
         "severity_term": int(round(severity_term)),
+        "rule_term_raw": int(round(rule_term)),
+        "ml_term_raw": int(round(ml_confidence_term)),
         "ml_highest_confidence": round(highest_ml_conf, 4) if ml_confidences else None,
         "average_severity": round(avg_sev, 2) if avg_sev is not None else None,
         "severity_source": severity_source,

@@ -309,8 +309,49 @@ export const PortScanDetection: React.FC<StageProps> = ({ isLearnMode, liveData 
 };
 
 // 7. Risk Fusion
+
+/**
+ * The five terms of the paper's fusion formula, in the order of equation (1).
+ * Any other key inside ``contributing_factors`` (``formula``, ``terms``,
+ * ``agreed_labels``, ``terms_pre_suppression`` ...) is explanatory metadata, not
+ * a term, so it must never be rendered as a score contribution.
+ */
+export const RISK_TERM_KEYS = [
+  'rule_detected',
+  'multi_signal_bonus',
+  'ml_confidence_term',
+  'agreement_bonus',
+  'severity_term',
+] as const;
+
+/**
+ * Normalises the risk breakdown served by the API.
+ *
+ * The backend returns ``contributing_factors`` as a JSON *object*, while older
+ * fixtures (and the cached UI payloads) carry it as a JSON *string*. Both shapes
+ * are accepted here; anything else yields an empty list instead of throwing.
+ * Zero terms are dropped because the waterfall only draws contributing factors.
+ */
+export function readRiskTerms(contributingFactors: unknown): Array<[string, number]> {
+  let parsed: unknown = contributingFactors;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return [];
+
+  const record = parsed as Record<string, unknown>;
+  return RISK_TERM_KEYS
+    .map((key) => [key, Number(record[key] ?? 0)] as [string, number])
+    .filter(([, value]) => Number.isFinite(value) && value !== 0);
+}
+
 export const PortScanRisk: React.FC<StageProps> = ({ isLearnMode, liveData }) => {
   let factors: Record<string, number> = {};
+  let riskFactors: unknown = undefined;
   let score = 0;
   let band = "";
 
@@ -324,17 +365,12 @@ export const PortScanRisk: React.FC<StageProps> = ({ isLearnMode, liveData }) =>
     band = "CRITICAL";
   } else {
     if (!liveData?.risk) return <UnavailableBadge msg="No risk score calculated." />;
-    try {
-      factors = JSON.parse(liveData.risk.contributing_factors || "{}");
-    } catch {
-      factors = {};
-    }
+    riskFactors = liveData.risk.contributing_factors;
     score = liveData.risk.score;
     band = liveData.risk.band.toUpperCase();
   }
 
-  // Filter non-zero terms
-  const nonZeroFactors = Object.entries(factors).filter(([_, val]) => val !== 0);
+  const nonZeroFactors = readRiskTerms(isLearnMode ? factors : riskFactors);
 
   return (
     <div className="flex flex-col h-full justify-center">

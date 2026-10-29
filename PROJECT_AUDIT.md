@@ -2,6 +2,8 @@
 
 *Generated: 2026-10-24 | Inspector & Engineer: Antigravity Full-Stack Engineering Agent*
 
+*Stage F (2026-10-27): the audit sources `AOD-IPS_Research_Paper.pdf` and `Phase2_Review_Presentation.pptx` were located outside the workspace, extracted and read, and the implementation was re-checked against them. Section 7 records what that changed.*
+
 ---
 
 ## 1. COMPONENT STATUS SUMMARY (All Verified)
@@ -13,12 +15,12 @@
 | Health endpoint `/health` | `app/main.py` | ✅ Working | Verified |
 | 10-scenario catalog | `app/services/simulation_service.py` | ✅ All 10 scenarios complete | `test_simulation.py::test_11` |
 | Synthetic simulation engine | `app/services/simulation_service.py` | ✅ Working | `test_simulation.py::test_02-07` |
-| Rule-based detection (9 behavioral rules) | `app/services/rule_engine.py` | ✅ Working | `test_rule_engine.py` (11 tests) |
-| Phishing URL lexical scorer (10 registered indicators, per-indicator cap 0.60) | `app/services/phishing/` (façade: `app/services/phishing_detector.py`) | ✅ Declared lexicon, offline by construction, self-describing | `tests/test_phishing_lexical.py` (92), `tests/test_phishing_golden_replay.py` (19), `test_phishing_detector.py` (14), `test_phishing_suite.py` (15) |
+| Rule-based detection (9 behavioral rules) | `app/services/rule_engine.py` | ✅ Working; the nine paper confidences are declared once in `RULE_CONFIDENCES` (plus one documented extension rule) | `test_rule_engine.py` (12 tests, incl. `test_rule_engine_confidences_match_paper_table`) |
+| Phishing URL lexical scorer (10 registered indicators, per-indicator cap 0.80) | `app/services/phishing/` (façade: `app/services/phishing_detector.py`) | ✅ Declared lexicon, offline by construction, self-describing | `tests/test_phishing_lexical.py` (93), `tests/test_phishing_golden_replay.py` (19), `test_phishing_detector.py` (14), `test_phishing_suite.py` (15) |
 | Packet-level IDS (24 rules: 15 sig, 4 thr, 5 stateful) | `app/services/ids/rules_engine.py` | ✅ 24 rules, each contract-validated and individually tested | `tests/test_ids_rules.py` (148), `tests/test_ids_golden_replay.py` (378 locked streams) |
 | Packet anomaly proxies (4 deterministic scorers x 14 features) | `app/services/ids/anomaly_scorer.py` | ✅ Deterministic proxies, explicitly not trained models | `tests/test_ids_anomaly.py` (135) |
 | Random Forest port-scan ML | `app/services/ml_engine.py`, `ml/registry.py`, `ml/features.py` | ✅ Trained, versioned, provenance-attested | `test_ml_model_lifecycle.py` (37) |
-| Risk fusion engine (0-100 score) | `app/services/risk_engine.py` | ✅ Working | `test_simulation.py::test_09` |
+| Risk fusion engine (0-100 score) | `app/services/risk_engine.py` | ✅ Implements eq. (1)-(3) incl. the Section IV-E `max(r, c)` de-duplication | `test_risk_engine.py` (6), `test_simulation.py::test_09` |
 | HMAC-SHA-256 evidence integrity | `app/services/integrity_service.py` | ✅ Working | `test_integrity_service.py` (11) |
 | Hash chain (per-session) | `app/models/models.py` | ✅ Working | After-insert listener |
 | Database persistence (SQLite/SQLAlchemy) | `app/database.py` + models | ✅ Working | Full test suite |
@@ -67,10 +69,10 @@
 
 ## 3. TEST SUITE RESULTS
 
-- **Backend Pytest:** **691 passed**, 0 failures across 29 test modules (measured 2026-10-27 on branch `reconstruction`).
-  History: 189 at the pre-reconstruction baseline (`ebaac9f`) -> 232 after stages B/D/F -> 521 after stage C -> 632 after stage E (`test_phishing_lexical.py` 92, `test_phishing_golden_replay.py` 19) -> 691 after stage A (`test_scenario_telemetry_contract.py` 59).
-- **Frontend Vitest:** **70 passed**, 0 failures across 18 test files; `tsc --noEmit` clean (`strict`, `noUnusedLocals`).
-- **Frontend Vite Build:** **1692 modules transformed**, 0 TypeScript errors, built in 24.9s (measured 2026-10-27 on branch `reconstruction`). Vite reports one chunk above its 500 kB advisory limit (`assets/index-*.js`, 609 kB / 155 kB gzipped) - an advisory warning, not an error.
+- **Backend Pytest:** **694 passed**, 0 failures across 29 test modules (measured 2026-10-27 on branch `reconstruction`, after stage F).
+  History: 189 at the pre-reconstruction baseline (`ebaac9f`) -> 232 after stages B/D/F -> 521 after stage C -> 632 after stage E (`test_phishing_lexical.py` 92, `test_phishing_golden_replay.py` 19) -> 691 after stage A (`test_scenario_telemetry_contract.py` 59) -> 694 after stage F (`+2` risk/phishing paper-bound tests, `+1` rule-confidence table test; `test_phishing_lexical.py` is now 93 and `test_rule_engine.py` 12).
+- **Frontend Vitest:** **72 passed**, 0 failures across 18 test files; `tsc --noEmit` clean (`strict`, `noUnusedLocals`).
+- **Frontend Vite Build:** **0 TypeScript errors**, exit code 0, built in 9.7s on the stage-F tree (an earlier stage-E measurement of the same command produced 1692 modules in 24.9s). Vite reports one chunk above its 500 kB advisory limit (`assets/index-*.js`, 609 kB / 155 kB gzipped) - an advisory warning, not an error.
 
 ---
 
@@ -133,9 +135,10 @@ changed.
 
 **Measured non-regression proof.** Over the common corpus: **5** URLs flipped to detection
 (decimal/octal/overflowing-dotted IPv4, trailing-dot IP, IDN homograph), **0** pre-existing
-detections were lost, and the 4 real legitimate URLs the scorer gets wrong (0.95/0.75 phishing,
-0.60/0.40 suspicious) are pinned rather than tuned away. The regeneration tool is deliberately
-named `regenerate_phishing_golden.py` - **no** `test_` prefix, so pytest can never rewrite a lock.
+detections were lost, and the 4 real legitimate URLs the scorer gets wrong (0.99/0.75 phishing,
+0.60/0.40 suspicious - re-measured in stage F after the cap correction) are pinned rather than
+tuned away. The regeneration tool is deliberately named `regenerate_phishing_golden.py` - **no**
+`test_` prefix, so pytest can never rewrite a lock.
 
 **Claims kept honest:** there is no reputation provider and no phishing ML model in this
 project; the page now says "Not implemented - no lookup was performed" and "No machine-learning
@@ -170,5 +173,56 @@ the preserved plan (with its labels) and a SHA-256 of the prompt - never the pro
 recall/F1 are label-set intersection figures, not per-event classification, and are documented as
 such rather than reported as accuracy; (c) provenance that a proposal could otherwise claim for
 itself (source, generator version) is overwritten authoritatively by the pipeline.
+
+---
+
+## 7. STAGE F CORRECTIONS - CHECKED AGAINST THE PAPER AND THE REVIEW DECK (2026-10-27)
+
+Earlier stages could only audit against a directive, because both authoritative documents were
+absent from the workspace. They are not absent: `C:\Users\Roshan Kumar Shetty\Downloads\`
+contains `AOD-IPS_Research_Paper.pdf` (6 pages) and `Phase2_Review_Presentation.pptx`
+(18 slides), plus the original `final-year-2.zip`. Both documents were extracted to text and read
+in full, so this stage is the first one in which requirements can be classified as
+*paper-verified* rather than *directive-derived*. The full classification is in
+`REQUIREMENTS_TRACEABILITY.md` section 4.
+
+Every numeric claim in the paper was then checked against the code: the ten scenarios and their
+trigger conditions (Table I), the nine rule confidences (Table I), the 15/4/5 packet-rule split
+(Table II), the four anomaly scorers over 14 features, the Random Forest's 100 trees / depth 6 /
+five features, the ten phishing weights with cap 0.99 and threshold 0.65, equations (1)-(3), the
+HMAC chain, the trainee-engine thresholds, the F1 > 0.85 gate with ≥10 examples, ≥2 per class and
+a stratified 75/25 split, "more than 50 endpoints in 12 routers" (measured 70 in 12) and
+"16 tables" (measured 16). All of those held. Four things did not.
+
+| # | Finding | Correction |
+|---|---|---|
+| 1 | **Risk fusion double-counted.** `compute_risk_score` summed `r` and `c` even when the rule engine and the ML model agreed on the same label, and its own comment claimed "the paper sums all five terms directly". The paper says the opposite: "When rule and ML agree, only the larger of r and c is kept to avoid double counting" (§IV-E). Consequences: an agreeing port scan scored **100/CRITICAL** where the paper's Fig. 6 reports **60/HIGH**, and the paper's "rule-only sessions cannot exceed 80" cap was meaningless. Three tests had been written to enforce the invented behaviour ("terms are never suppressed"). | `r` and `c` are now replaced by `max(r, c)` whenever `agreed_labels` is non-empty; the agreement bonus `a` is still added. Both raw values are persisted in `terms_pre_suppression` and the decision in `double_counting_suppression`, and the legacy integer keys carry the *effective* values so a UI that adds the cards up reaches the persisted score. Three tests corrected, and `test_paper_double_counting_boundaries` now asserts the paper's 60/HIGH and 80/HIGH bounds directly. |
+| 2 | **The phishing per-indicator cap contradicted Fig. 7.** The cap was 0.60, so a keyword-only URL contributed at most 0.60 and could never cross the 0.65 threshold: measured, 3, 4 and 6 credential tokens all scored exactly 0.60 ("suspicious"). The paper (§IV-D + Fig. 7) says four tokens (4 x 0.20 = 0.80) are enough to flag a short HTTPS URL. | Cap raised to **0.80** - the smallest guard that reproduces the published arithmetic while still stopping one count-based indicator from reaching the 0.99 ceiling alone. `test_paper_fig7_four_suspicious_tokens_are_flagged` asserts 3 tokens => 0.60/suspicious and 4 => 0.80/phishing on the real scorer. Re-measured false positives: both affected legitimate URLs move 0.95 -> 0.99 with **unchanged verdicts** (they were already in the phishing tier); the other two are unchanged. The 74-case lock was regenerated and reported `changed cases: 0`, i.e. the locked corpus never exercised a four-token URL - which is why the defect survived stage E. |
+| 3 | **The risk waterfall was blank in live mode.** `PortScanRisk` did `JSON.parse(liveData.risk.contributing_factors)`, but the investigation endpoint serialises that field as an object, so the parse threw into a `catch` and the component drew zero rows; the unit test passed only because it mocked a JSON *string*. `AttackAnatomy` rendered every key of the same object, so it would have printed `+[object Object]`, the formula text and the label array as if they were score contributions. | New `readRiskTerms()` accepts object or string, restricts the waterfall to the five formula terms in equation order, and drops zero values; both components use it. Two new vitest cases cover the real API shape and the metadata-exclusion rule. |
+| 4 | **The rule count was off by one against the paper.** Table I lists nine rules; the engine emits ten labels, because `multiple_failed_logins_detected` (≥5 failures per source/account in 300 s, confidence 0.88) duplicates the paper's `sustained_attack_no_compromise` (≥4, no later success, 0.85) at a different threshold. The 0.88 confidence exists nowhere in the paper, and the extra label raises the multi-signal term `m` by 15 whenever both fire. | Not removed - deleting a tested detection rule is the author's call, not a silent cleanup - but made explicit: the nine paper confidences now live in `RULE_CONFIDENCES` with `PAPER_RULE_LABELS` naming them, the extension carries a comment saying it is not a reported result, and `test_rule_engine_confidences_match_paper_table` pins the split between the two sets. |
+
+**Deck claims that the code cannot support (documentation correction, nothing to implement).**
+`Phase2_Review_Presentation.pptx` presents XGBoost as a deployed model (slides 2, 9, 13), quotes
+"XGBoost 94.6% / 93.8% / 94.1%" and "Random Forest 91.8% / 90.4% / 89.7%" (slide 14), and says
+datasets were collected from Kaggle (slide 13). The repository contains **no XGBoost** (a test
+asserts the string is absent from the ML engine), **no public dataset** (everything is synthetic),
+and **no such metrics** - the only measured figures are `accuracy/precision/recall/f1 = 1.0` on a
+synthetic hold-out with 500 samples, stored with `data_source: synthetic` in
+`ml/models/port_scan_rf_metrics.json`. The deck's clone/smishing modules likewise do not exist;
+URL, email and spear-phishing scorers do. The paper supersedes the deck, and these numbers must
+not be presented as measured results in the review.
+
+**Verification on the stage-F tree.** Backend `694 passed` (from 691); frontend `18 files /
+72 tests passed` (from 70); `tsc --noEmit` exit 0; `vite build` exit 0 with the pre-existing
+500 kB chunk advisory. No test was deleted or skipped to reach those numbers: the three risk
+assertions that encoded the old behaviour were corrected, and five tests were added.
+
+**Still open, deliberately.** (a) The paper's figures 1-8 are raster images, so their numbers were
+verified through the prose and tables that describe them, not by reading the images. (b) The
+tenth rule, the presentation's unsupported metrics and the uncalibrated phishing threshold are all
+author decisions and are documented rather than silently changed. (c) Persisted `RiskScore` rows
+in the shipped `aod_ips.db` were computed under the old formula; they are refreshed the next time
+a session is scored, and no bulk rewrite of the demo database was performed.
+
 
 

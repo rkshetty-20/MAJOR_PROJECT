@@ -197,16 +197,40 @@ def test_tier_boundaries_are_exact():
 
 
 def test_single_indicator_contribution_cap():
-    assert MAX_SINGLE_INDICATOR_CONTRIBUTION == 0.60
+    # Paper IV-D gives each suspicious token 0.20 and Fig. 7 states that four
+    # tokens are enough to flag a short HTTPS URL, so the guard is exactly 0.80.
+    assert MAX_SINGLE_INDICATOR_CONTRIBUTION == 0.80
     spec = LEXICAL_INDICATORS["rule_suspicious_keywords"]
     assert spec["weight_kind"] == "per_match"
     assert saturate(fuse(spec, 2)) == 0.4
     assert saturate(fuse(spec, 3)) == 0.6
     # Before stage E the keyword weight multiplied out unbounded: 10 keywords
-    # contributed 2.0 and single-handedly maxed the score.
-    assert fuse(spec, 4) == 0.6
-    assert fuse(spec, 10) == 0.6
+    # contributed 2.0 and single-handedly maxed the score. The guard stops that
+    # without preventing the paper's four-token sensitivity from working.
+    assert fuse(spec, 4) == 0.8
+    assert fuse(spec, 10) == 0.8
     assert fuse(spec, 0) == 0.0
+
+
+def test_paper_fig7_four_suspicious_tokens_are_flagged():
+    """Paper Fig. 7: "a short HTTPS URL needs four suspicious tokens to be flagged".
+
+    The published arithmetic is 4 x 0.20 = 0.80 >= the 0.65 threshold, while three
+    tokens (0.60) stay below it. Asserted on the real scorer, not on the weights.
+    """
+    three = score_url("https://abc.example/verify/account/login")
+    four = score_url("https://abc.example/verify/account/login/secure")
+
+    assert three["confidence"] == 0.60
+    assert three["verdict"] == "suspicious"
+    assert four["confidence"] == 0.80
+    assert four["verdict"] == "phishing"
+
+    keyword_rule = next(r for r in four["indicators"] if r["id"] == "rule_suspicious_keywords")
+    assert keyword_rule["contribution"] == 0.80
+    # A keyword-only URL can reach the flag tier but never the 0.99 ceiling, which
+    # is what keeps one count-based indicator from deciding the verdict alone.
+    assert keyword_rule["contribution"] < CONFIDENCE_CAP
 
 
 def fuse(spec: Dict[str, Any], keyword_count: int) -> float:
@@ -469,7 +493,8 @@ def test_open_redirect_and_suspicious_tld_only_apply_in_the_tiered_view():
     top = score_url("http://secure-account-verification.top/login", include_extended=True)
     assert top["features"]["suspicious_tld"] is True
     assert "rule_suspicious_tld" in {i["id"] for i in top["indicators"]}
-    assert top["confidence"] == 0.95
+    # 4 tokens (0.80) + no-HTTPS (0.20) + suspicious TLD (0.15) saturates at 0.99.
+    assert top["confidence"] == CONFIDENCE_CAP
 
 
 # ---------------------------------------------------------------------------
@@ -541,7 +566,7 @@ def test_provenance_states_limits_that_are_true():
     note = UNCALIBRATED_NOTE
     assert "no precision, recall or accuracy figure is published" in note
     # The limitation must carry measured evidence, not an adjective.
-    assert "0.95" in note and "https://support.google.com/accounts/verify-account-login" in note
+    assert "0.99" in note and "https://support.google.com/accounts/verify-account-login" in note
     assert block["calibration_note"] == note
 
 

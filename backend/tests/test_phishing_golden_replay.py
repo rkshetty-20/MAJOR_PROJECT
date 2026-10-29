@@ -135,7 +135,11 @@ def test_lock_respects_caps_and_thresholds():
 #: Real, legitimate HTTPS URLs. Their scores are the counter-evidence against any
 #: precision claim, so they are pinned here as well as in UNCALIBRATED_NOTE.
 MEASURED_FALSE_POSITIVES = {
-    "https://support.google.com/accounts/verify-account-login": (0.95, "phishing"),
+    # Re-measured after the Stage F per-indicator cap correction (0.80): both URLs
+    # below carry four credential tokens, so their keyword term is 0.80 rather
+    # than the previously truncated 0.60. The verdict is unchanged - each was
+    # already in the phishing tier - but the reported confidence is now 0.99.
+    "https://support.google.com/accounts/verify-account-login": (0.99, "phishing"),
     "https://accounts.google.com/ServiceLogin/signin": (0.75, "phishing"),
     "https://www.microsoft.com/en-us/security/account-verification/login": (0.60, "suspicious"),
     "https://help.github.com/en/articles/updating-your-password-support": (0.40, "suspicious"),

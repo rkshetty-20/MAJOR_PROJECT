@@ -7,7 +7,7 @@ import {
   ActivitySquare, Layers
 } from 'lucide-react';
 import api from '../../api';
-import { PortScanAttack, PortScanTelemetry, PortScanSuricata, PortScanFeatures, PortScanMLModel, PortScanDetection, PortScanRisk } from './PortScanVisuals';
+import { PortScanAttack, PortScanTelemetry, PortScanSuricata, PortScanFeatures, PortScanMLModel, PortScanDetection, PortScanRisk, readRiskTerms } from './PortScanVisuals';
 
 interface AnatomyStage {
   id: string;
@@ -697,12 +697,12 @@ export const AttackAnatomy: React.FC<AttackAnatomyProps> = ({
                 
                 <div className="col-span-2 sm:col-span-1 bg-slate-900 rounded-xl border border-slate-700 p-5">
                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-3">Contributing Factors</div>
-                   {contributing_factors && Object.keys(contributing_factors).length > 0 ? (
+                   {readRiskTerms(contributing_factors).length > 0 ? (
                      <div className="space-y-2">
-                        {Object.entries(contributing_factors).map(([k, v]) => (
+                        {readRiskTerms(contributing_factors).map(([k, v]) => (
                            <div key={k} className="flex justify-between items-center text-xs">
                               <span className="text-slate-300 capitalize">{k.replace(/_/g, ' ')}</span>
-                              <span className="font-mono text-indigo-400">+{String(v)}</span>
+                              <span className="font-mono text-indigo-400">+{v}</span>
                            </div>
                         ))}
                      </div>

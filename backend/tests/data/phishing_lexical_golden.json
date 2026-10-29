@@ -266,7 +266,7 @@
           ],
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_long_url",
@@ -296,7 +296,7 @@
           ],
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_long_url",
@@ -518,7 +518,7 @@
           ],
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ]
         ]
       },
@@ -540,7 +540,7 @@
           ],
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ]
         ],
         "scheme": "http",
@@ -1096,7 +1096,7 @@
     },
     "http://secure-account-verification.top/login": {
       "legacy": {
-        "confidence": 0.8,
+        "confidence": 0.99,
         "explanation": "Suspicious URL identified. Does not use secure HTTPS. Contains 4 suspicious or credential-harvesting keywords (account, login, secure, verify).",
         "features": {
           "domain": "secure-account-verification.top",
@@ -1120,17 +1120,17 @@
           ],
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ]
         ]
       },
       "tiered": {
         "classification": "phishing",
-        "confidence": 0.95,
+        "confidence": 0.99,
         "is_phishing": true,
         "open_redirect_detected": false,
         "path_depth": 1,
-        "risk_score": 95,
+        "risk_score": 99,
         "rules": [
           [
             "rule_no_https",
@@ -1138,7 +1138,7 @@
           ],
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_suspicious_tld",
@@ -1293,7 +1293,7 @@
           ],
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_misleading_subdomain",
@@ -1315,7 +1315,7 @@
           ],
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_misleading_subdomain",
@@ -1695,7 +1695,7 @@
         "rules": [
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_many_subdomains",
@@ -1717,7 +1717,7 @@
         "rules": [
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_many_subdomains",
@@ -2405,7 +2405,7 @@
     },
     "https://support.google.com/accounts/verify-account-login": {
       "legacy": {
-        "confidence": 0.95,
+        "confidence": 0.99,
         "explanation": "Suspicious URL identified. Contains 4 suspicious or credential-harvesting keywords (account, login, support, verify). Contains misleading brand names or keywords in subdomains.",
         "features": {
           "domain": "google.com",
@@ -2425,7 +2425,7 @@
         "rules": [
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_misleading_subdomain",
@@ -2435,15 +2435,15 @@
       },
       "tiered": {
         "classification": "phishing",
-        "confidence": 0.95,
+        "confidence": 0.99,
         "is_phishing": true,
         "open_redirect_detected": false,
         "path_depth": 2,
-        "risk_score": 95,
+        "risk_score": 99,
         "rules": [
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_misleading_subdomain",
@@ -2456,7 +2456,7 @@
     },
     "https://www.example.com/account/login?verify=1&update=1&secure=1&password=1&auth=1&confirm=1&support=1&banking=1": {
       "legacy": {
-        "confidence": 0.8,
+        "confidence": 0.99,
         "explanation": "Suspicious URL identified. Contains 10 suspicious or credential-harvesting keywords (account, auth, banking, confirm, login, password, secure, support, update, verify). URL length is unusually long (112 characters). Contains many special characters, often used for obfuscation.",
         "features": {
           "domain": "example.com",
@@ -2476,7 +2476,7 @@
         "rules": [
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_long_url",
@@ -2490,15 +2490,15 @@
       },
       "tiered": {
         "classification": "phishing",
-        "confidence": 0.8,
+        "confidence": 0.99,
         "is_phishing": true,
         "open_redirect_detected": false,
         "path_depth": 2,
-        "risk_score": 80,
+        "risk_score": 99,
         "rules": [
           [
             "rule_suspicious_keywords",
-            0.6
+            0.8
           ],
           [
             "rule_long_url",

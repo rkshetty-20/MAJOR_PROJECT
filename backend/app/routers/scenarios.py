@@ -46,12 +46,19 @@ def list_scenarios(db: Session = Depends(get_db)) -> List[Scenario]:
 @router.post("/seed", response_model=SeedResponse, status_code=status.HTTP_201_CREATED, summary="Seed standard scenarios")
 def seed_scenarios(db: Session = Depends(get_db)) -> SeedResponse:
     """
-    Inserts or updates the 5 standard attack scenarios with realistic configurations:
+    Inserts the training-catalogue rows this endpoint owns, skipping categories
+    that already exist (idempotent). The six entries are:
     - port_scan (with structured target/attacker, behavioral rules, correct actions & scoring)
     - ssh_brute_force
     - web_probing
     - sql_injection
     - phishing
+    - multiple_failed_logins
+
+    This table is the *training catalogue* the trainee engine selects from, not
+    the ten-scenario synthetic telemetry generator (see
+    ``app/services/simulation_service.py``, which executes all ten paper
+    scenarios regardless of which rows exist here).
     """
     seed_data = [
         {

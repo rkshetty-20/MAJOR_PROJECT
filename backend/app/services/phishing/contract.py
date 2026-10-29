@@ -33,11 +33,18 @@ SUSPICIOUS_THRESHOLD = 0.35
 SEVERITY_ORDER = ("low", "medium", "high", "critical")
 
 #: Credibility of a single indicator. ``rule_suspicious_keywords`` is the only
-#: weighted-by-count indicator; without this guard ten keyword tokens alone
-#: (2.0) saturate the whole score, which is how a legitimate login URL gets a
-#: 99 % verdict. The cap keeps every verdict corroborated by at least two
-#: independent signals before the score reaches the ceiling.
-MAX_SINGLE_INDICATOR_CONTRIBUTION = 0.60
+#: weighted-by-count indicator, so without this guard ten keyword tokens
+#: (10 x 0.20 = 2.0) would saturate the whole score on one signal.
+#:
+#: The value is fixed by the paper, not chosen freely. Section IV-D gives each
+#: suspicious token 0.20 and a 0.65 flag threshold, and Fig. 7 states that "a
+#: short HTTPS URL needs four suspicious tokens to be flagged". 4 x 0.20 = 0.80
+#: is therefore the smallest cap that keeps the published sensitivity true while
+#: still stopping one count-based indicator from reaching the 0.99 ceiling alone.
+#: (A 0.60 cap silently made four - and even ten - tokens score only 0.60, so a
+#: keyword-only URL could never be flagged; see the Stage F entry in
+#: ``PROJECT_AUDIT.md``.)
+MAX_SINGLE_INDICATOR_CONTRIBUTION = 0.80
 
 # ---------------------------------------------------------------------------
 # Indicator vocabulary
@@ -556,7 +563,7 @@ UNCALIBRATED_NOTE = (
     "Weights are hand-set heuristics, not fitted parameters. No labelled evaluation "
     "corpus was used, so no precision, recall or accuracy figure is published for this "
     "scorer. Measured false positives on real legitimate HTTPS URLs: "
-    "'https://support.google.com/accounts/verify-account-login' scores 0.95 (phishing "
+    "'https://support.google.com/accounts/verify-account-login' scores 0.99 (phishing "
     "tier) and "
     "'https://www.microsoft.com/en-us/security/account-verification/login' scores 0.60 "
     "(suspicious tier), because credential vocabulary and brand names appear in "
