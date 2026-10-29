@@ -59,7 +59,7 @@ const STAGES: StageData[] = [
     attackerAction: 'The user follows a suspicious link that could lead to a credential-harvesting page.',
     potentialImpact: 'Exposure of valid credentials or session tokens to the attacker.',
     plainLanguage: 'The deceptive link directs the user to a webpage designed to look exactly like a legitimate login portal.',
-    technicalExplanation: 'The URL heuristic detector identifies characteristics like long lengths, excessive subdomains, or IP-based hosts. External reputation checks verify if the domain is known to be malicious.',
+    technicalExplanation: 'The URL scorer identifies lexical characteristics such as long lengths, excessive subdomains, or IP-based hosts. Reputation feeds can additionally tell whether a domain is already known to be malicious; this project deliberately performs no reputation lookup and never fetches the URL, so its verdict is structural only.',
     mitreTechnique: 'T1204.001 - User Execution: Malicious Link',
     illustrativeEvidence: {
       type: 'url',
@@ -267,7 +267,7 @@ export const AttackWalkthrough: React.FC = () => {
                     <>
                       <div><span className="text-slate-500">URL:</span> {stage.illustrativeEvidence.url}</div>
                       <div><span className="text-slate-500">Score:</span> <span className="text-amber-400">{stage.illustrativeEvidence.heuristicScore}</span></div>
-                      <div><span className="text-slate-500">VT:</span> {stage.illustrativeEvidence.reputation}</div>
+                      <div><span className="text-slate-500">Vendor flags:</span> {stage.illustrativeEvidence.reputation} <span className="text-slate-500">(illustrative - no reputation provider is integrated in this project)</span></div>
                     </>
                   )}
                   {stage.illustrativeEvidence.type === 'auth' && (

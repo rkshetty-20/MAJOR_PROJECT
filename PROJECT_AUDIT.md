@@ -14,7 +14,7 @@
 | 10-scenario catalog | `app/services/simulation_service.py` | ✅ All 10 scenarios complete | `test_simulation.py::test_11` |
 | Synthetic simulation engine | `app/services/simulation_service.py` | ✅ Working | `test_simulation.py::test_02-07` |
 | Rule-based detection (9 behavioral rules) | `app/services/rule_engine.py` | ✅ Working | `test_rule_engine.py` (8/8 passed) |
-| Phishing URL lexical scorer | `app/services/phishing_detector.py` | ✅ Pure stdlib offline fallback | `test_phishing_detector.py` (14/14 passed) |
+| Phishing URL lexical scorer (10 registered indicators, per-indicator cap 0.60) | `app/services/phishing/` (façade: `app/services/phishing_detector.py`) | ✅ Declared lexicon, offline by construction, self-describing | `tests/test_phishing_lexical.py` (92), `tests/test_phishing_golden_replay.py` (19), `test_phishing_detector.py` (14), `test_phishing_suite.py` (15) |
 | Packet-level IDS (24 rules: 15 sig, 4 thr, 5 stateful) | `app/services/ids/rules_engine.py` | ✅ 24 rules, each contract-validated and individually tested | `tests/test_ids_rules.py` (148), `tests/test_ids_golden_replay.py` (378 locked streams) |
 | Packet anomaly proxies (4 deterministic scorers x 14 features) | `app/services/ids/anomaly_scorer.py` | ✅ Deterministic proxies, explicitly not trained models | `tests/test_ids_anomaly.py` (135) |
 | Random Forest port-scan ML | `app/services/ml_engine.py`, `ml/registry.py`, `ml/features.py` | ✅ Trained, versioned, provenance-attested | `test_ml_model_lifecycle.py` (37) |
@@ -38,7 +38,7 @@
 | Attack Simulation page | ✅ Working | `npm run build` |
 | Adaptive "Adaptive Rec" & "Apply Recommendation" UI | ✅ Working | `npm run build` |
 | Raw Dataset Generator & Replay Studio | ✅ Working | `npm run build` |
-| Phishing Detection page | ✅ Working | `npm run build` |
+| Phishing Detection page (renders the served indicator contract, states the uncalibrated limit) | ✅ Working | `PhishingDetectionPage.test.tsx` (5) |
 | Intrusion Detection & IDS Rules | ✅ Working | `npm run build` |
 
 ---
@@ -67,9 +67,9 @@
 
 ## 3. TEST SUITE RESULTS
 
-- **Backend Pytest:** **521 passed**, 0 failures across 25 test modules (measured 2026-10-27 on branch `reconstruction`).
-  History: 189 at the pre-reconstruction baseline (`ebaac9f`) -> 232 after stages B/D/F -> 521 after stage C added
-  `test_ids_rules.py` (148), `test_ids_anomaly.py` (135) and `test_ids_golden_replay.py` (6).
+- **Backend Pytest:** **632 passed**, 0 failures across 28 test modules (measured 2026-10-27 on branch `reconstruction`).
+  History: 189 at the pre-reconstruction baseline (`ebaac9f`) -> 232 after stages B/D/F -> 521 after stage C -> 632 after stage E (`test_phishing_lexical.py` 92, `test_phishing_golden_replay.py` 19).
+- **Frontend Vitest:** **70 passed**, 0 failures across 18 test files; `tsc --noEmit` clean (`strict`, `noUnusedLocals`).
 - **Frontend Vite Build:** **1692 modules transformed**, 0 TypeScript errors, bundle generated in 36s.
 
 ---
@@ -108,3 +108,37 @@ contains no fitting, no ML library and no trained-model metric; `pipeline.live_t
 is `False` in every analysis response because no authorized live ingestion path exists; and
 benign high-volume traffic is recorded as tripping `THR-CONN-RATE` rather than being reported
 as a clean-benign case.
+
+---
+
+## 5. STAGE E CORRECTIONS - LEXICAL PHISHING (2026-10-27)
+
+Section 1 of this file described the phishing scorer as a *"pure stdlib offline fallback"*
+verified by `test_phishing_detector.py` (14 tests). The fallback existed, but the module was a
+958-line monolith whose behaviour did not match the label: a per-match keyword weight could
+push confidence to **2.0** on a 0-1 scale, malformed hosts crashed with interpreter text, a
+single bad link inside an email body produced **HTTP 500**, and the UI advertised a
+"URL Reputation (VirusTotal)" card and an "ML Classification" block for a project that has
+**no** reputation client, API key or phishing model. Each item was measured before it was
+changed.
+
+| # | Finding in the committed code | Correction |
+|---|---|---|
+| 1 | Weights existed only as inline literals inside the scoring function; nothing could enumerate or validate them. | `app/services/phishing/contract.py` holds a declarative registry (`id`, `category`, `version`, `weight`, `weight_kind`, `inputs`, `matching`, `severity`, `predicate`, `mitre`) validated at import time: 10 core indicators plus 2 extended (redirection, suspicious TLD), with `provenance()`/`UNCALIBRATED_NOTE` served by `GET /api/detect/phishing/indicators`. |
+| 2 | `rule_suspicious_keywords` added its weight once **per matched token** - measured maximum contribution 2.0. | Every indicator is capped at `MAX_SINGLE_INDICATOR_CONTRIBUTION = 0.60` before summing, the total is capped at 0.99 and quantised to 4 decimals; measured post-change maximum contribution is exactly 0.60. |
+| 3 | `int(port)` and `urlsplit` raised raw `ValueError`/`Invalid IPv6 URL`; whitespace, NUL, NBSP, bidi overrides and bad host labels were parsed into a meaningless host and **scored anyway**. | A single `MalformedURLError` (a `ValueError` subclass, so old callers still work) with a declared `reason` from a closed set; 19 hostile inputs are rejected, 11 of which were previously scored, and the routers turn the reason into a stable HTTP 400 `detail` string. |
+| 4 | Embedded-link analysis in email/spear scorers let `ValueError` escape the endpoint. | Per-link guard: rejected links are returned in `links_analysis.skipped_links` / `link_analysis.skipped` with their reason, so one bad link degrades the result instead of killing the request. |
+| 5 | A dead reputation cache, unused `httpx`/`os`/`base64`/`time`/`unquote` imports and a default `tldextract` constructor that downloads publicsuffix.org. | Package split into `contract.py`, `url_features.py`, `scorer.py`, `email_scorer.py`, `spear_scorer.py` behind a compatibility façade; `TLDExtract(suffix_list_urls=())` pins the bundled snapshot; the suite scores the corpus with sockets disabled and a source scan asserts no HTTP/DNS client is imported. |
+| 6 | No record of what the rewrite changed. | 66 URLs / 6 emails / 2 spear messages are scored before and after: the immutable pre-change record (`phishing_lexical_baseline_pre_stage_e.json`, including its crashes) and the current lock (`phishing_lexical_golden.json`) are replayed by `test_phishing_golden_replay.py`. |
+
+**Measured non-regression proof.** Over the common corpus: **5** URLs flipped to detection
+(decimal/octal/overflowing-dotted IPv4, trailing-dot IP, IDN homograph), **0** pre-existing
+detections were lost, and the 4 real legitimate URLs the scorer gets wrong (0.95/0.75 phishing,
+0.60/0.40 suspicious) are pinned rather than tuned away. The regeneration tool is deliberately
+named `regenerate_phishing_golden.py` - **no** `test_` prefix, so pytest can never rewrite a lock.
+
+**Claims kept honest:** there is no reputation provider and no phishing ML model in this
+project; the page now says "Not implemented - no lookup was performed" and "No machine-learning
+model is used here", renders every weight, cap and threshold from the served registry, and
+prints a plain error if that registry cannot be read instead of inventing fallback numbers.
+

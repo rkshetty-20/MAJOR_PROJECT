@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Search,
   ShieldAlert,
@@ -25,6 +25,65 @@ import { PageHeader, Card, Button, StatusBadge, ErrorState, Mono } from './ui';
 // ==========================================
 // Types
 // ==========================================
+
+/** Provenance block the backend publishes with every verdict. */
+interface ScorerProvenance {
+  scorer: string;
+  version: string;
+  model_family: string;
+  trained_model: boolean;
+  fitted_on_data: boolean;
+  calibration: string;
+  calibration_note: string;
+  network_access: boolean;
+  submits_url: boolean;
+  resolves_dns: boolean;
+  domain_suffix_list: string;
+  external_reputation: { implemented: boolean; providers: string[]; note: string };
+  core_indicators: number;
+  extended_indicators: number;
+  confidence_cap: number;
+  max_single_indicator_contribution: number;
+  thresholds: { phishing: number; suspicious: number; legitimate_below: number };
+  deterministic: boolean;
+  categories?: Record<string, number>;
+}
+
+/** One indicator as the backend registry declares it. */
+interface LexicalIndicator {
+  id: string;
+  name: string;
+  category: string;
+  version: string;
+  weight: number;
+  weight_kind: string;
+  inputs: string[];
+  matching: string;
+  severity: string;
+  explanation: string;
+  mitre: string;
+  core: boolean;
+  extended: boolean;
+}
+
+/** Response of GET /api/detect/phishing/indicators. */
+interface IndicatorRegistry {
+  scorer: string;
+  version: string;
+  core_indicators: number;
+  extended_indicators: number;
+  declared_features: number;
+  required_features: number;
+  evidence_only_features: number;
+  features_produced_by_extractor: number;
+  confidence_cap: number;
+  max_single_indicator_contribution: number;
+  thresholds: { phishing: number; suspicious: number };
+  keyword_vocabulary_size: number;
+  categories: Record<string, number>;
+  indicators: LexicalIndicator[];
+  provenance: ScorerProvenance;
+}
 
 interface UrlPhishingResult {
   url: string;
@@ -56,10 +115,19 @@ interface UrlPhishingResult {
     feature_values: Record<string, any>;
   }>;
   reputation?: {
-    provider: string;
-    status: 'match' | 'no_match' | 'unavailable';
-    details: string;
+    /**
+     * False in this project: no reputation provider is integrated anywhere.
+     * The UI must render that fact instead of implying a degraded lookup.
+     */
+    implemented?: boolean;
+    provider?: string | null;
+    status?: 'match' | 'no_match' | 'unavailable';
+    details?: string;
   };
+  scorer?: { name: string; version: string };
+  provenance?: ScorerProvenance;
+  confidence_cap?: number;
+  max_single_indicator_contribution?: number;
 }
 
 interface EmailPhishingResult {
@@ -78,10 +146,14 @@ interface EmailPhishingResult {
   };
   links_analysis: {
     total_links: number;
+    analyzed_links_count?: number;
     flagged_links: any[];
     all_links: any[];
+    /** Links found in the body that could not be parsed. Reported, never dropped. */
+    skipped_links?: Array<{ url: string; reason: string }>;
     anchor_mismatches: Array<{ displayed: string; actual_destination: string }>;
   };
+  provenance?: MessageScorerProvenance;
   triggered_rules: Array<{
     id: string;
     name: string;
@@ -89,6 +161,15 @@ interface EmailPhishingResult {
     contribution: number;
     feature_values: Record<string, any>;
   }>;
+}
+
+/** Provenance published with the email and spear verdicts. */
+interface MessageScorerProvenance {
+  model_family: string;
+  trained_model: boolean;
+  calibration: string;
+  network_access: boolean;
+  note: string;
 }
 
 interface SpearPhishingResult {
@@ -119,6 +200,8 @@ interface SpearPhishingResult {
     feature_values: Record<string, any>;
   }>;
   recommended_countermeasures: string[];
+  link_analysis?: { evaluated: string | null; skipped: Array<{ url: string; reason: string }> };
+  provenance?: MessageScorerProvenance;
 }
 
 interface PhishingDetectionPageProps {
@@ -133,6 +216,12 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
   const [isUrlLoading, setIsUrlLoading] = useState(false);
   const [urlResult, setUrlResult] = useState<UrlPhishingResult | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
+
+  // The indicator registry is read from the backend, never restated here as
+  // prose: counts, weights and thresholds come from the registry the scorer
+  // actually evaluates (validated at import time on the server).
+  const [registry, setRegistry] = useState<IndicatorRegistry | null>(null);
+  const [registryError, setRegistryError] = useState<string | null>(null);
 
   // Email state
   const [emailSender, setEmailSender] = useState('');
@@ -158,6 +247,29 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
   // ==========================================
   // Handlers
   // ==========================================
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<IndicatorRegistry>('/api/detect/phishing/indicators')
+      .then((res) => {
+        if (!cancelled) {
+          setRegistry(res.data);
+          setRegistryError(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRegistry(null);
+          setRegistryError(
+            'The indicator registry could not be read from GET /api/detect/phishing/indicators. No fallback weights are shown, because inventing them here would misrepresent the scorer.',
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleAnalyzeUrl = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -267,7 +379,7 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
     <div className="w-full max-w-4xl mx-auto space-y-6 pb-20">
       <PageHeader
         title="Phishing Detection"
-        description="Unified Offensive-Defensive Phishing Analysis Suite (URL, Email, & Spear Phishing)"
+        description="Offline lexical analysis of URLs, email messages and targeted messages. Nothing is fetched, resolved or sent to a third party."
         icon={<ShieldAlert className="w-5 h-5" />}
       />
 
@@ -381,7 +493,8 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
                 </div>
                 <p className="mt-2 text-[11px] text-ink-muted flex items-center gap-1">
                   <Info className="w-3 h-3" aria-hidden />
-                  Offline lexical heuristics, open-redirect parameter inspection, and RFC domain feature parsing.
+                  Deterministic lexical and structural indicators, open-redirect parameter inspection, and offline
+                  RFC-domain feature parsing. The verdict is a triage signal, not a confirmed identification.
                 </p>
               </div>
             </form>
@@ -407,8 +520,10 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
                       {urlResult.is_phishing ? <ShieldAlert className="w-6 h-6" /> : <ShieldCheck className="w-6 h-6" />}
                     </div>
                     <div>
-                      <h3 className={`text-lg font-bold ${urlResult.is_phishing ? 'text-warning' : 'text-success'}`}>
-                        {urlResult.is_phishing ? 'Suspicious (Phishing Likely)' : 'Benign (No Immediate Threats)'}
+                      <h3 className={`text-lg font-bold ${urlResult.is_phishing ? 'text-warning' : 'text-ink-soft'}`}>
+                        {urlResult.is_phishing
+                          ? 'Phishing indicators crossed the threshold'
+                          : 'Below the phishing threshold - not a safety verdict'}
                       </h3>
                       <p className="text-sm text-ink-soft mt-1">{urlResult.explanation}</p>
                       <p className="text-xs text-ink-muted mt-2">
@@ -420,10 +535,27 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
                     <div className="text-2xl font-black text-ink">
                       {(urlResult.heuristic_confidence * 100).toFixed(0)}%
                     </div>
-                    <div className="text-[10px] text-ink-muted uppercase tracking-wider mt-1">Heuristic Score</div>
-                    <div className="text-[10px] text-ink-faint mt-1">Threshold: 65%</div>
+                    <div className="text-[10px] text-ink-muted uppercase tracking-wider mt-1">Lexical Score</div>
+                    <div className="text-[10px] text-ink-faint mt-1">
+                      Phishing threshold: {Math.round((urlResult.provenance?.thresholds?.phishing ?? 0.65) * 100)}%
+                    </div>
+                    <div className="text-[10px] text-ink-faint">
+                      Reported cap: {Math.round((urlResult.confidence_cap ?? 0.99) * 100)}%
+                    </div>
                   </div>
                 </div>
+
+                {/* Uncalibrated limitation, straight from the backend provenance block. */}
+                {urlResult.provenance && (
+                  <p className="mt-3 text-[11px] leading-relaxed text-ink-muted bg-app/50 border border-line rounded-card p-3">
+                    <span className="font-semibold text-warning">
+                      {urlResult.provenance.calibration.replace(/_/g, ' ')}:
+                    </span>{' '}
+                    scores are hand-set indicator weights, not a fitted model. No precision, recall or accuracy
+                    figure is published for this scorer, and a score below the threshold is not evidence that a URL
+                    is safe.
+                  </p>
+                )}
 
                 {urlResult.triggered_rules && urlResult.triggered_rules.length > 0 && (
                   <div className="mt-4 bg-app/50 p-4 rounded-card border border-line">
@@ -524,65 +656,197 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
                 </div>
               </Card>
 
-              {/* 2. ML Classification */}
-              <Card title="ML Classification" icon={<Database className="w-4 h-4" />}>
+              {/* 2. Detection method - stated, not implied */}
+              <Card title="Detection Method" icon={<Activity className="w-4 h-4" />}>
                 <div className="p-4 rounded-card border border-line bg-app/50 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-elevated/60">
                       <Info className="w-5 h-5 text-ink-muted" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-medium text-ink-soft">Model Unavailable</h4>
+                      <h4 className="text-sm font-medium text-ink-soft">No machine-learning model is used here</h4>
                       <p className="text-xs text-ink-muted mt-0.5">
-                        Phishing classification model has not been trained yet. Waiting for labeled dataset.
+                        This verdict is produced by a deterministic lexical scorer. There is no trained phishing
+                        classifier in this project and no model output is being withheld - the ML models that do exist
+                        are for network telemetry (port scan / authentication), not for URL phishing.
                       </p>
                     </div>
                   </div>
-                  <StatusBadge tone="neutral">Not Configured</StatusBadge>
+                  <StatusBadge tone="neutral">Deterministic</StatusBadge>
                 </div>
               </Card>
 
-              {/* 3. URL Reputation */}
-              <Card title="URL Reputation (VirusTotal)" icon={<Globe className="w-4 h-4" />}>
-                {urlResult.reputation ? (
+              {/* 3. External reputation - not implemented in this project */}
+              <Card title="External Reputation" icon={<Globe className="w-4 h-4" />}>
+                {urlResult.reputation?.implemented === false ? (
+                  <div className="p-4 rounded-card border border-line bg-app/50 flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-elevated/60">
+                        <HelpCircle className="w-5 h-5 text-ink-faint" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium text-ink-soft">Not implemented - no lookup was performed</h4>
+                        <p className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
+                          {urlResult.reputation.details}
+                        </p>
+                      </div>
+                    </div>
+                    <Mono>provider: none</Mono>
+                  </div>
+                ) : (
                   <div
                     className={`p-4 rounded-card border ${getReputationColor(
-                      urlResult.reputation.status
+                      urlResult.reputation?.status ?? 'unavailable'
                     )} flex items-center justify-between transition-colors`}
                   >
                     <div className="flex items-start sm:items-center gap-3 flex-col sm:flex-row">
                       <div className="p-2 rounded-lg bg-app/50">
-                        {getReputationIcon(urlResult.reputation.status)}
+                        {getReputationIcon(urlResult.reputation?.status ?? 'unavailable')}
                       </div>
                       <div>
                         <h4 className="text-sm font-medium">
-                          {urlResult.reputation.status === 'match' && 'Malicious URL Detected'}
-                          {urlResult.reputation.status === 'no_match' && 'No Malicious Records Found'}
-                          {urlResult.reputation.status === 'unavailable' && 'Reputation Lookup Unavailable'}
+                          {urlResult.reputation?.status === 'match' && 'Malicious URL Reported By Provider'}
+                          {urlResult.reputation?.status === 'no_match' && 'No Records Reported By Provider'}
+                          {urlResult.reputation?.status === 'unavailable' && 'Reputation Lookup Unavailable'}
                         </h4>
                         <p className="text-xs mt-1 opacity-80 max-w-xl">
-                          {urlResult.reputation.details}
-                          {urlResult.reputation.status === 'no_match' &&
+                          {urlResult.reputation?.details}
+                          {urlResult.reputation?.status === 'no_match' &&
                             ' (Note: Absence of records is not sufficient evidence to declare a URL safe)'}
                         </p>
                       </div>
                     </div>
                     <span className="hidden sm:inline-flex">
-                      <Mono title={urlResult.reputation.provider}>{urlResult.reputation.provider}</Mono>
+                      <Mono title={urlResult.reputation?.provider ?? 'unknown'}>
+                        {urlResult.reputation?.provider ?? 'unknown'}
+                      </Mono>
                     </span>
                   </div>
-                ) : (
-                  <div className="p-4 rounded-card border border-line bg-app/50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-elevated/60">
-                        <HelpCircle className="w-5 h-5 text-ink-muted" />
+                )}
+              </Card>
+
+              {/* 4. The indicator registry the backend actually evaluates */}
+              <Card
+                title="Scorer Contract"
+                icon={<Database className="w-4 h-4" />}
+                right={
+                  registry ? (
+                    <Mono>{`${registry.scorer} v${registry.version}`}</Mono>
+                  ) : undefined
+                }
+              >
+                {registry ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3 bg-app/50 rounded-card border border-line">
+                        <div className="text-lg font-black text-ink">{registry.core_indicators}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-ink-faint mt-0.5">
+                          Core indicators
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-ink-soft">Reputation Lookup Disabled</h4>
-                        <p className="text-xs text-ink-muted mt-0.5">VirusTotal API key is not configured.</p>
+                      <div className="p-3 bg-app/50 rounded-card border border-line">
+                        <div className="text-lg font-black text-ink">{registry.extended_indicators}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-ink-faint mt-0.5">
+                          Extended indicators
+                        </div>
+                      </div>
+                      <div className="p-3 bg-app/50 rounded-card border border-line">
+                        <div className="text-lg font-black text-ink">
+                          {Math.round(registry.max_single_indicator_contribution * 100)}%
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wider text-ink-faint mt-0.5">
+                          Per-indicator weight cap
+                        </div>
+                      </div>
+                      <div className="p-3 bg-app/50 rounded-card border border-line">
+                        <div className="text-lg font-black text-ink">{registry.keyword_vocabulary_size}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-ink-faint mt-0.5">
+                          Keyword vocabulary
+                        </div>
                       </div>
                     </div>
+
+                    <div className="overflow-x-auto rounded-card border border-line">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-app/60 text-ink-faint uppercase tracking-wider">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold">Indicator</th>
+                            <th className="px-3 py-2 font-semibold whitespace-nowrap">Weight</th>
+                            <th className="px-3 py-2 font-semibold">When it fires</th>
+                            <th className="px-3 py-2 font-semibold">Inputs read</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {registry.indicators.map((indicator) => (
+                            <tr key={indicator.id} className="border-t border-line align-top">
+                              <td className="px-3 py-2">
+                                <span className="font-medium text-ink">{indicator.name}</span>
+                                <span className="text-ink-faint"> ({indicator.category})</span>
+                                {indicator.extended && (
+                                  <span className="ml-2 text-[10px] uppercase tracking-wider text-accent-soft">
+                                    tiered view only
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap">
+                                <Mono>
+                                  {Math.round(indicator.weight * 100)}%
+                                  {indicator.weight_kind === 'per_match' ? ' x matches' : ''}
+                                </Mono>
+                              </td>
+                              <td className="px-3 py-2 text-ink-muted">{indicator.matching}</td>
+                              <td className="px-3 py-2">
+                                <Mono>{indicator.inputs.join(', ')}</Mono>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-ink-muted">
+                      <div className="flex items-center justify-between gap-2 bg-app/50 border border-line rounded-card px-3 py-2">
+                        <dt className="uppercase tracking-wider text-ink-faint">Fetches the URL</dt>
+                        <dd className="font-semibold text-success">
+                          {registry.provenance.network_access ? 'yes' : 'never'}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 bg-app/50 border border-line rounded-card px-3 py-2">
+                        <dt className="uppercase tracking-wider text-ink-faint">Resolves DNS</dt>
+                        <dd className="font-semibold text-success">
+                          {registry.provenance.resolves_dns ? 'yes' : 'never'}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 bg-app/50 border border-line rounded-card px-3 py-2">
+                        <dt className="uppercase tracking-wider text-ink-faint">Trained model</dt>
+                        <dd className="font-semibold text-warning">
+                          {registry.provenance.trained_model ? 'yes' : 'none'}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 bg-app/50 border border-line rounded-card px-3 py-2">
+                        <dt className="uppercase tracking-wider text-ink-faint">Reputation provider</dt>
+                        <dd className="font-semibold text-warning">
+                          {registry.provenance.external_reputation.implemented
+                            ? registry.provenance.external_reputation.providers.join(', ')
+                            : 'none integrated'}
+                        </dd>
+                      </div>
+                      <div className="sm:col-span-2 flex items-start justify-between gap-2 bg-app/50 border border-line rounded-card px-3 py-2">
+                        <dt className="uppercase tracking-wider text-ink-faint shrink-0">Domain suffix data</dt>
+                        <dd>
+                          <Mono>{registry.provenance.domain_suffix_list}</Mono>
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <p className="text-[11px] leading-relaxed text-ink-muted bg-app/50 border border-line rounded-card p-3">
+                      {registry.provenance.calibration_note}
+                    </p>
                   </div>
+                ) : (
+                  <p className="text-xs text-ink-muted">
+                    {registryError ?? 'Reading the indicator registry from the backend …'}
+                  </p>
                 )}
               </Card>
 
@@ -764,7 +1028,7 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
 
                   <div className="text-center sm:text-right p-3 bg-app/50 rounded-card border border-line shrink-0">
                     <div className="text-2xl font-black text-ink">{emailResult.risk_score} / 100</div>
-                    <div className="text-[10px] text-ink-muted uppercase tracking-wider mt-1">Threat Score</div>
+                    <div className="text-[10px] text-ink-muted uppercase tracking-wider mt-1">Risk Score</div>
                     <div className="text-[10px] text-ink-faint mt-1">Confidence: {(emailResult.confidence * 100).toFixed(0)}%</div>
                   </div>
                 </div>
@@ -814,6 +1078,15 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
                           {emailResult.links_analysis.anchor_mismatches.length > 0 ? 'Detected' : 'None'}
                         </span>
                       </div>
+                      <div className="flex justify-between">
+                        <span className="text-ink-muted">Unparseable Links (skipped):</span>
+                        <span
+                          className={(emailResult.links_analysis.skipped_links?.length ?? 0) > 0 ? 'text-warning font-semibold' : 'text-ink'}
+                          title="Links that were found in the body but rejected by the URL validator. Their reasons are listed below - a skipped link is not a clean link."
+                        >
+                          {emailResult.links_analysis.skipped_links?.length ?? 0}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -838,6 +1111,35 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
                       ))}
                     </div>
                   </div>
+                )}
+
+                {(emailResult.links_analysis.skipped_links?.length ?? 0) > 0 && (
+                  <div className="mt-4 bg-app/50 p-4 rounded-card border border-line">
+                    <h4 className="text-xs font-bold text-ink-faint uppercase tracking-wider mb-2">
+                      Links The Validator Rejected
+                    </h4>
+                    <ul className="space-y-1 text-xs text-ink-muted">
+                      {emailResult.links_analysis.skipped_links!.map((link) => (
+                        <li key={link.url} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                          <Mono className="shrink-0">{link.url}</Mono>
+                          <span>- {link.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-[11px] text-ink-faint mt-2">
+                      These links were not scored. The message analysis completed instead of failing, but the link
+                      content remains unexamined.
+                    </p>
+                  </div>
+                )}
+
+                {emailResult.provenance && (
+                  <p className="mt-4 text-[11px] leading-relaxed text-ink-muted bg-app/50 border border-line rounded-card p-3">
+                    <span className="font-semibold text-warning">
+                      {emailResult.provenance.calibration.replace(/_/g, ' ')}:
+                    </span>{' '}
+                    {emailResult.provenance.note}
+                  </p>
                 )}
               </Card>
             </div>
@@ -1032,7 +1334,9 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-lg font-bold text-ink">
-                          {spearResult.is_phishing ? 'ATTACK DETECTED: SPEAR PHISHING' : 'BENIGN COMMUNICATION'}
+                          {spearResult.is_phishing
+                            ? 'Spear-phishing pretext indicators crossed the threshold'
+                            : 'No spear-phishing pretext crossed the threshold'}
                         </h3>
                         <StatusBadge tone={getRiskTone(spearResult.risk_level)}>
                           {spearResult.attack_vector.toUpperCase()}
@@ -1044,7 +1348,7 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
 
                   <div className="text-center sm:text-right p-3 bg-app/50 rounded-card border border-line shrink-0">
                     <div className="text-2xl font-black text-ink">{spearResult.risk_score} / 100</div>
-                    <div className="text-[10px] text-ink-muted uppercase tracking-wider mt-1">Spear Likelihood</div>
+                    <div className="text-[10px] text-ink-muted uppercase tracking-wider mt-1">Risk Score</div>
                     <div className="text-[10px] text-ink-faint mt-1">Confidence: {(spearResult.confidence * 100).toFixed(0)}%</div>
                   </div>
                 </div>
@@ -1110,6 +1414,31 @@ export const PhishingDetectionPage: React.FC<PhishingDetectionPageProps> = ({ on
                       ))}
                     </ul>
                   </div>
+                )}
+
+                {(spearResult.link_analysis?.skipped.length ?? 0) > 0 && (
+                  <div className="mt-4 bg-app/50 p-4 rounded-card border border-line">
+                    <h4 className="text-xs font-bold text-ink-faint uppercase tracking-wider mb-2">
+                      Embedded Links The Validator Rejected
+                    </h4>
+                    <ul className="space-y-1 text-xs text-ink-muted">
+                      {spearResult.link_analysis!.skipped.map((link) => (
+                        <li key={link.url} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                          <Mono className="shrink-0">{link.url}</Mono>
+                          <span>- {link.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {spearResult.provenance && (
+                  <p className="mt-4 text-[11px] leading-relaxed text-ink-muted bg-app/50 border border-line rounded-card p-3">
+                    <span className="font-semibold text-warning">
+                      {spearResult.provenance.calibration.replace(/_/g, ' ')}:
+                    </span>{' '}
+                    {spearResult.provenance.note}
+                  </p>
                 )}
               </Card>
             </div>

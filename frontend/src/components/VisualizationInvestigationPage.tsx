@@ -567,12 +567,13 @@ export const VisualizationInvestigationPage: React.FC<Props> = ({
                   {isMalicious ? <ShieldAlert className="w-10 h-10" /> : <ShieldCheck className="w-10 h-10" />}
                 </div>
                 <h3 className={`text-xl font-bold mb-2 ${isMalicious ? 'text-amber-400' : 'text-emerald-400'}`}>
-                  {isMalicious ? 'Suspicious URL' : 'Benign URL'}
+                  {isMalicious ? 'Indicators crossed threshold' : 'Below the phishing threshold'}
                 </h3>
                 <div className="text-3xl font-black text-white my-2">{(confidence * 100).toFixed(0)}%</div>
-                <div className="text-xs text-slate-400 uppercase tracking-wider font-bold">Heuristic Score</div>
+                <div className="text-xs text-slate-400 uppercase tracking-wider font-bold">Lexical Score</div>
                 <p className="text-[11px] text-slate-500 mt-4 leading-relaxed">
-                  Note: This score is a heuristic risk indicator based on identifiable features, not a calibrated probability of phishing.
+                  Note: this score is a deterministic sum of hand-set lexical indicator weights, not a calibrated
+                  probability of phishing, and a low score is not evidence that a URL is safe.
                 </p>
               </div>
               
@@ -587,7 +588,11 @@ export const VisualizationInvestigationPage: React.FC<Props> = ({
                       reputationResult.status === 'no_match' ? 'bg-emerald-500/10 border-emerald-500/30' :
                       'bg-slate-800 border-slate-700'
                     }`}>
-                      <h4 className="text-sm font-bold text-white mb-1">VirusTotal v3</h4>
+                      <h4 className="text-sm font-bold text-white mb-1">
+                        {reputationResult.implemented === false
+                          ? 'No provider integrated'
+                          : (reputationResult.provider || 'Reputation provider')}
+                      </h4>
                       <p className={`text-xs ${
                         reputationResult.status === 'match' ? 'text-rose-400' :
                         reputationResult.status === 'no_match' ? 'text-emerald-400' :
@@ -596,19 +601,26 @@ export const VisualizationInvestigationPage: React.FC<Props> = ({
                         {reputationResult.details}
                       </p>
                     </div>
+                    {reputationResult.implemented === false && (
+                      <p className="text-[11px] text-slate-500 mt-3">
+                        This is not a degraded or failed lookup: no reputation integration exists in the codebase, and
+                        no URL is fetched or resolved. The score shown beside it comes only from the offline lexical
+                        indicators.
+                      </p>
+                    )}
                     {reputationResult.status === 'no_match' && (
                       <p className="text-[11px] text-slate-500 mt-3">
                         Absence of records is not sufficient evidence to declare a URL safe. Provider failures or inconclusive responses are not proof of safety.
                       </p>
                     )}
-                    {reputationResult.status === 'unavailable' && (
+                    {reputationResult.implemented !== false && reputationResult.status === 'unavailable' && (
                       <p className="text-[11px] text-slate-500 mt-3">
-                        Reputation lookup failed or is disabled. Ensure valid API credentials and network access.
+                        Reputation lookup failed or is disabled. Treat the URL as unverified rather than benign.
                       </p>
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500">Reputation data not available.</p>
+                  <p className="text-xs text-slate-500">No reputation data was returned with this result.</p>
                 )}
               </div>
             </div>

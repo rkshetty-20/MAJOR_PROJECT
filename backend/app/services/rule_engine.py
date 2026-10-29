@@ -514,7 +514,20 @@ def _evaluate_security_events(
     for ev in sec_events:
         # Assuming event_type == 'phishing_url' or target containing 'http' implies a URL check is needed
         if ev.event_type == "phishing_url" or (ev.target and ev.target.startswith("http")):
-            is_phishing, confidence, features, eval_explanation, triggered_rules = evaluate_phishing_url(ev.target)
+            # Stored telemetry is attacker-observable input: a target such as
+            # "http://host:99999/login" used to raise out of the lexical scorer
+            # and abort the whole evaluation with an unhandled ValueError. A URL
+            # that cannot be parsed is skipped and reported, never fatal.
+            try:
+                is_phishing, confidence, features, eval_explanation, triggered_rules = evaluate_phishing_url(ev.target)
+            except ValueError as exc:
+                logger.warning(
+                    "Skipping unparsable phishing URL in session %s (event %s): %s",
+                    session_id,
+                    getattr(ev, "id", "?"),
+                    getattr(exc, "reason", "malformed-url"),
+                )
+                continue
             if is_phishing:
                 explanation = f"Suspicious phishing URL telemetry identified: deceptive domain ({ev.target}). " + eval_explanation
                 

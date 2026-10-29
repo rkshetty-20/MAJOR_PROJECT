@@ -136,7 +136,11 @@ def test_new_device_rule_detection():
         db.refresh(session)
         session_id = session.id
 
-        now = datetime.now(timezone.utc)
+        # Pinned clock: these events are ``login_attempt`` rows, so behavioural
+        # rule 7 (anomalous login time, default window 07-22 UTC) also reads their
+        # hour. Using the wall clock made this test fail for every run outside
+        # 07:00-22:00 UTC - a pre-existing flakiness unrelated to stage E.
+        now = datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)  # inside 07-22
         
         # Baseline known device login
         ev1 = SecurityEvent(
@@ -308,7 +312,11 @@ def test_impossible_travel_rule_detection():
         db.refresh(session)
         session_id = session.id
 
-        now = datetime.now(timezone.utc)
+        # Pinned clock - see the note in test_new_device_rule_detection. Two of
+        # these rows are ``login_attempt`` events, so an unpinned hour outside the
+        # default 07-22 window adds a spurious anomalous_login_time detection and
+        # breaks the exact-count assertions below.
+        now = datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)  # inside 07-22
         
         def local_haversine(lat1, lon1, lat2, lon2):
             R = 6371.0
@@ -1043,7 +1051,10 @@ def test_ground_truth_fields_never_reach_behavioural_decisions():
     try:
         seed_scenarios(db)
         scenario = db.query(Scenario).first()
-        now = datetime.now(timezone.utc)
+        # Pinned inside the default 07-22 window: one of the injected rows is a
+        # ``login_attempt``, and the verdicts below are compared across sessions,
+        # so the hour must not float with the wall clock.
+        now = datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)
 
         def deviating_login(label_scenario, label_status):
             sess = _new_session(db, scenario, f"leak_{label_scenario}_{label_status}")

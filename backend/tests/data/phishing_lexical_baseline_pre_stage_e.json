@@ -1,0 +1,2909 @@
+{
+  "comment": "Recorded lexical-scoring behaviour for a fixed corpus. Regenerate with python tests/regenerate_phishing_golden.py --out tests/data/phishing_lexical_golden.json",
+  "emails": {
+    "00|Alice Smith <alice@example.com>|Meeting minutes": {
+      "analyzed_links": 0,
+      "classification": "legitimate",
+      "confidence": 0.0,
+      "risk_score": 0,
+      "rules": [],
+      "total_links": 0
+    },
+    "01|PayPal Security Team <paypal-alerts247@gmail.com>|URGENT: Your account has been suspended - Verify immediately!": {
+      "analyzed_links": 1,
+      "classification": "phishing",
+      "confidence": 0.99,
+      "risk_score": 99,
+      "rules": [
+        [
+          "rule_sender_display_spoof",
+          0.4
+        ],
+        [
+          "rule_reply_to_mismatch",
+          0.25
+        ],
+        [
+          "rule_urgency_pressure",
+          0.3
+        ],
+        [
+          "rule_credential_harvesting_cta",
+          0.30000000000000004
+        ],
+        [
+          "rule_generic_salutation",
+          0.15
+        ],
+        [
+          "rule_malicious_embedded_url",
+          0.45
+        ]
+      ],
+      "total_links": 1
+    },
+    "02|Alert <a@corp.example>|verify": {
+      "error": "ValueError: Port out of range 0-65535"
+    },
+    "03|Alert <a@corp.example>|verify": {
+      "error": "ValueError: Port could not be cast to integer value as 'notaport'"
+    },
+    "04|Alert <a@corp.example>|verify": {
+      "analyzed_links": 1,
+      "classification": "legitimate",
+      "confidence": 0.15,
+      "risk_score": 15,
+      "rules": [
+        [
+          "rule_insecure_links_in_email",
+          0.15
+        ]
+      ],
+      "total_links": 1
+    },
+    "05|PayPal <paypal@paypal.com>|Receipt": {
+      "analyzed_links": 1,
+      "classification": "legitimate",
+      "confidence": 0.0,
+      "risk_score": 0,
+      "rules": [],
+      "total_links": 1
+    }
+  },
+  "spears": {
+    "00|Weekly Department Review": {
+      "attack_vector": "benign",
+      "classification": "legitimate",
+      "confidence": 0.0,
+      "rules": [
+        [
+          "rule_spear_recipient_name",
+          0.2
+        ],
+        [
+          "rule_spear_role_alignment",
+          0.2
+        ]
+      ]
+    },
+    "01|Confidential: Urgent Wire Transfer Required Today": {
+      "attack_vector": "bec_wire_fraud",
+      "classification": "phishing",
+      "confidence": 0.99,
+      "rules": [
+        [
+          "rule_spear_recipient_name",
+          0.2
+        ],
+        [
+          "rule_spear_role_alignment",
+          0.2
+        ],
+        [
+          "rule_spear_exec_spoofing",
+          0.4
+        ],
+        [
+          "rule_spear_authority_coercion",
+          0.25
+        ],
+        [
+          "rule_spear_channel_isolation",
+          0.3
+        ],
+        [
+          "rule_spear_bec_wire_fraud",
+          0.45
+        ]
+      ]
+    }
+  },
+  "urls": {
+    "//example.com/x": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 15
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "",
+        "suspicious_tld": false
+      }
+    },
+    "example.com/login": {
+      "legacy": {
+        "error": "ValueError: URL must include a valid hostname"
+      },
+      "tiered": {
+        "error": "ValueError: URL must include a valid hostname"
+      }
+    },
+    "ftp://example.com/file": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 22
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "ftp",
+        "suspicious_tld": false
+      }
+    },
+    "http://": {
+      "legacy": {
+        "error": "ValueError: URL must include a valid hostname"
+      },
+      "tiered": {
+        "error": "ValueError: URL must include a valid hostname"
+      }
+    },
+    "http://-bad-start.com/": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "-bad-start.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 14,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 2,
+          "unusual_port": false,
+          "url_length": 22
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://.leading-dot.com/": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "leading-dot.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 16,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 1,
+          "unusual_port": false,
+          "url_length": 24
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://0x1.0x2.0x3.0x4/login": {
+      "legacy": {
+        "confidence": 0.55,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords. Has an unusually high number of subdomains (3).",
+        "features": {
+          "domain": "0x4",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 15,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 3,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 28
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.55,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 55,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://1.2.3.4/verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-verify-account-login-secure-": {
+      "legacy": {
+        "confidence": 0.99,
+        "explanation": "Suspicious URL identified. Uses an IP address instead of a hostname. Does not use secure HTTPS. Contains 4 suspicious or credential-harvesting keywords. URL length is unusually long. Contains many special characters, often used for obfuscation.",
+        "features": {
+          "domain": "1.2.3.4",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 7,
+          "is_https": false,
+          "is_ip": true,
+          "is_punycode": false,
+          "keyword_count": 4,
+          "num_subdomains": 0,
+          "special_chars": 48,
+          "unusual_port": false,
+          "url_length": 351
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.8
+          ],
+          [
+            "rule_long_url",
+            0.1
+          ],
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.99,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 99,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.8
+          ],
+          [
+            "rule_long_url",
+            0.1
+          ],
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://1357796046/login": {
+      "legacy": {
+        "confidence": 0.4,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "1357796046",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 10,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 23
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.4,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 40,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://192.0.2.10./verify": {
+      "legacy": {
+        "confidence": 0.4,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "192.0.2.10",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 25
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.4,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 40,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://192.168.1.1/login": {
+      "legacy": {
+        "confidence": 0.8,
+        "explanation": "Suspicious URL identified. Uses an IP address instead of a hostname. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "192.168.1.1",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": true,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 24
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.8,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 80,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://192.168.1.50/update-banking-account-login-verify": {
+      "legacy": {
+        "confidence": 0.99,
+        "explanation": "Suspicious URL identified. Uses an IP address instead of a hostname. Does not use secure HTTPS. Contains 5 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "192.168.1.50",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 12,
+          "is_https": false,
+          "is_ip": true,
+          "is_punycode": false,
+          "keyword_count": 5,
+          "num_subdomains": 0,
+          "special_chars": 4,
+          "unusual_port": false,
+          "url_length": 55
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            1.0
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.99,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 99,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            1.0
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://256.256.256.256/login": {
+      "legacy": {
+        "confidence": 0.55,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords. Has an unusually high number of subdomains (3).",
+        "features": {
+          "domain": "256",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 15,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 3,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 28
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.55,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 55,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://[::1]/login": {
+      "legacy": {
+        "confidence": 0.8,
+        "explanation": "Suspicious URL identified. Uses an IP address instead of a hostname. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "[::1]",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 3,
+          "is_https": false,
+          "is_ip": true,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 18
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.8,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 80,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://[fe80::1%25eth0]/x": {
+      "legacy": {
+        "confidence": 0.6,
+        "explanation": "URL appears benign. Uses an IP address instead of a hostname. Does not use secure HTTPS.",
+        "features": {
+          "domain": "[fe80::1%25eth0]",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 14,
+          "is_https": false,
+          "is_ip": true,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 1,
+          "unusual_port": false,
+          "url_length": 25
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.6,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 60,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://a..b.example.com/": {
+      "legacy": {
+        "confidence": 0.35,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Has an unusually high number of subdomains (3).",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 16,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 3,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 24
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.35,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 35,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com/": {
+      "legacy": {
+        "confidence": 0.3,
+        "explanation": "URL appears benign. Does not use secure HTTPS. URL length is unusually long.",
+        "features": {
+          "domain": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 304,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 312
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_long_url",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.3,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 30,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_long_url",
+            0.1
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://admin:admin@192.0.2.57:8080/session/login?confirm=1": {
+      "legacy": {
+        "confidence": 0.99,
+        "explanation": "Suspicious URL identified. Uses an IP address instead of a hostname. Does not use secure HTTPS. Contains 2 suspicious or credential-harvesting keywords. Contains credentials (username/password) embedded in the URL. Connects to a non-standard HTTP/HTTPS port.",
+        "features": {
+          "domain": "192.0.2.57",
+          "has_credentials": true,
+          "has_misleading_subdomain": false,
+          "hostname_length": 10,
+          "is_https": false,
+          "is_ip": true,
+          "is_punycode": false,
+          "keyword_count": 2,
+          "num_subdomains": 0,
+          "special_chars": 3,
+          "unusual_port": true,
+          "url_length": 58
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.4
+          ],
+          [
+            "rule_credentials",
+            0.3
+          ],
+          [
+            "rule_unusual_port",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.99,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 2,
+        "risk_score": 99,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.4
+          ],
+          [
+            "rule_credentials",
+            0.3
+          ],
+          [
+            "rule_unusual_port",
+            0.1
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://apple\u202e.com/verify": {
+      "legacy": {
+        "confidence": 0.4,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "apple\u202e.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 10,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 24
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.4,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 40,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://bad+.com/": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "bad+.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 8,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 16
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://exa mple.com/login": {
+      "legacy": {
+        "confidence": 0.4,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "exa mple.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 12,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 25
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.4,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 40,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://exam\bple.com": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "exam\bple.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 12,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 19
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://example.com/": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 19
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://example.com/\u0000evil": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 24
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://example.com:/": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 20
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://example.com:0/": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 21
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://example.com:80/status": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 28
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://example.com:99999/login": {
+      "legacy": {
+        "error": "ValueError: Port out of range 0-65535"
+      },
+      "tiered": {
+        "error": "ValueError: Port out of range 0-65535"
+      }
+    },
+    "http://example.com:notaport/login": {
+      "legacy": {
+        "error": "ValueError: Port could not be cast to integer value as 'notaport'"
+      },
+      "tiered": {
+        "error": "ValueError: Port could not be cast to integer value as 'notaport'"
+      }
+    },
+    "http://paypal\u00a0.com/verify": {
+      "legacy": {
+        "confidence": 0.4,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "paypal\u00a0.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 25
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.4,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 40,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://secure-account-verification.top/login": {
+      "legacy": {
+        "confidence": 0.8,
+        "explanation": "Suspicious URL identified. Does not use secure HTTPS. Contains 3 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "secure-account-verification.top",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 31,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 3,
+          "num_subdomains": 0,
+          "special_chars": 2,
+          "unusual_port": false,
+          "url_length": 44
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.6000000000000001
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.95,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 95,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.6000000000000001
+          ],
+          [
+            "rule_suspicious_tld",
+            0.15
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": true
+      }
+    },
+    "http://user:password@example.com": {
+      "legacy": {
+        "confidence": 0.7,
+        "explanation": "Suspicious URL identified. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords. Contains credentials (username/password) embedded in the URL.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": true,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 1,
+          "unusual_port": false,
+          "url_length": 32
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_credentials",
+            0.3
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.7,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 70,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_credentials",
+            0.3
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://user@example.com:23/x": {
+      "legacy": {
+        "confidence": 0.6,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains credentials (username/password) embedded in the URL. Connects to a non-standard HTTP/HTTPS port.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": true,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 1,
+          "unusual_port": true,
+          "url_length": 28
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_credentials",
+            0.3
+          ],
+          [
+            "rule_unusual_port",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.6,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 60,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_credentials",
+            0.3
+          ],
+          [
+            "rule_unusual_port",
+            0.1
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://verify-account.update.banking-secure.com/login?token=12345": {
+      "legacy": {
+        "confidence": 0.99,
+        "explanation": "Suspicious URL identified. Does not use secure HTTPS. Contains 6 suspicious or credential-harvesting keywords. Contains misleading brand names or keywords in subdomains.",
+        "features": {
+          "domain": "banking-secure.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": true,
+          "hostname_length": 40,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 6,
+          "num_subdomains": 2,
+          "special_chars": 4,
+          "unusual_port": false,
+          "url_length": 65
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            1.2000000000000002
+          ],
+          [
+            "rule_misleading_subdomain",
+            0.35
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.99,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 99,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            1.2000000000000002
+          ],
+          [
+            "rule_misleading_subdomain",
+            0.35
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://xn--p1as.com/verify": {
+      "legacy": {
+        "confidence": 0.7,
+        "explanation": "Suspicious URL identified. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords. Uses Punycode (often used in homograph attacks).",
+        "features": {
+          "domain": "xn--p1as.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 12,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": true,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 2,
+          "unusual_port": false,
+          "url_length": 26
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_punycode",
+            0.3
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.7,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 70,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_punycode",
+            0.3
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://\u00fcber-mensch.example.com/login": {
+      "legacy": {
+        "confidence": 0.4,
+        "explanation": "URL appears benign. Does not use secure HTTPS. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 23,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 1,
+          "special_chars": 1,
+          "unusual_port": false,
+          "url_length": 36
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.4,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 40,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "http://\u0430\u0440\u0430\u0435.com/paypal": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Does not use secure HTTPS.",
+        "features": {
+          "domain": "\u0430\u0440\u0430\u0435.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 8,
+          "is_https": false,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 22
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_no_https",
+            0.2
+          ]
+        ],
+        "scheme": "http",
+        "suspicious_tld": false
+      }
+    },
+    "https://192.0.2.10/verify-account": {
+      "legacy": {
+        "confidence": 0.8,
+        "explanation": "Suspicious URL identified. Uses an IP address instead of a hostname. Contains 2 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "192.0.2.10",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 10,
+          "is_https": true,
+          "is_ip": true,
+          "is_punycode": false,
+          "keyword_count": 2,
+          "num_subdomains": 0,
+          "special_chars": 1,
+          "unusual_port": false,
+          "url_length": 33
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.4
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.8,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 80,
+        "rules": [
+          [
+            "rule_ip_host",
+            0.4
+          ],
+          [
+            "rule_suspicious_keywords",
+            0.4
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://a.b.c.example.com/": {
+      "legacy": {
+        "confidence": 0.15,
+        "explanation": "URL appears benign. Has an unusually high number of subdomains (3).",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 17,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 3,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 26
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.15,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 15,
+        "rules": [
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://a.b.example.com/": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 15,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 2,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 24
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.0,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 0,
+        "rules": [],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://apple.support.verify.account-login.top/secure/idcard?id=8f2": {
+      "legacy": {
+        "confidence": 0.99,
+        "explanation": "Suspicious URL identified. Contains 5 suspicious or credential-harvesting keywords. Has an unusually high number of subdomains (3). Contains misleading brand names or keywords in subdomains.",
+        "features": {
+          "domain": "account-login.top",
+          "has_credentials": false,
+          "has_misleading_subdomain": true,
+          "hostname_length": 38,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 5,
+          "num_subdomains": 3,
+          "special_chars": 3,
+          "unusual_port": false,
+          "url_length": 67
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            1.0
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ],
+          [
+            "rule_misleading_subdomain",
+            0.35
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.99,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 2,
+        "risk_score": 99,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            1.0
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ],
+          [
+            "rule_misleading_subdomain",
+            0.35
+          ],
+          [
+            "rule_suspicious_tld",
+            0.15
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": true
+      }
+    },
+    "https://docs.example.co.uk/manual/page": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "example.co.uk",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 18,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 1,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 38
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.0,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 2,
+        "risk_score": 0,
+        "rules": [],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 20
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.0,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 0,
+        "rules": [],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/?a=1&b=2&c=3": {
+      "legacy": {
+        "confidence": 0.1,
+        "explanation": "URL appears benign. Contains many special characters, often used for obfuscation.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 6,
+          "unusual_port": false,
+          "url_length": 32
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.1,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 10,
+        "rules": [
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/?a=1&b=2&c=3&d=4&e=5&f=6": {
+      "legacy": {
+        "confidence": 0.1,
+        "explanation": "URL appears benign. Contains many special characters, often used for obfuscation.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 12,
+          "unusual_port": false,
+          "url_length": 44
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.1,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 10,
+        "rules": [
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 53
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.0,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 17,
+        "risk_score": 0,
+        "rules": [],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+      "legacy": {
+        "confidence": 0.1,
+        "explanation": "URL appears benign. URL length is unusually long.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 82
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_long_url",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.1,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 10,
+        "rules": [
+          [
+            "rule_long_url",
+            0.1
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+      "legacy": {
+        "confidence": 0.1,
+        "explanation": "URL appears benign. URL length is unusually long.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 83
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_long_url",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.1,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 10,
+        "rules": [
+          [
+            "rule_long_url",
+            0.1
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/out/https://evil.example": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 44
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.25,
+        "is_phishing": false,
+        "open_redirect_detected": true,
+        "path_depth": 3,
+        "risk_score": 25,
+        "rules": [
+          [
+            "rule_open_redirect",
+            0.25
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment/path-segment": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. URL length is unusually long. Contains many special characters, often used for obfuscation.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 40,
+          "unusual_port": false,
+          "url_length": 539
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_long_url",
+            0.1
+          ],
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.2,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 40,
+        "risk_score": 20,
+        "rules": [
+          [
+            "rule_long_url",
+            0.1
+          ],
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com/redirect?url=http://attacker-controlled-site.xyz/login": {
+      "legacy": {
+        "confidence": 0.2,
+        "explanation": "URL appears benign. Contains 1 suspicious or credential-harvesting keywords.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 1,
+          "num_subdomains": 0,
+          "special_chars": 4,
+          "unusual_port": false,
+          "url_length": 74
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.45,
+        "is_phishing": false,
+        "open_redirect_detected": true,
+        "path_depth": 1,
+        "risk_score": 45,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_open_redirect",
+            0.25
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com:443/status": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 30
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.0,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 0,
+        "rules": [],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://example.com:8443/checkout": {
+      "legacy": {
+        "confidence": 0.1,
+        "explanation": "URL appears benign. Connects to a non-standard HTTP/HTTPS port.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 11,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 0,
+          "special_chars": 0,
+          "unusual_port": true,
+          "url_length": 33
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_unusual_port",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.1,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 10,
+        "rules": [
+          [
+            "rule_unusual_port",
+            0.1
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://login.paypal.com.scammer-verification.net/auth": {
+      "legacy": {
+        "confidence": 0.9,
+        "explanation": "Suspicious URL identified. Contains 2 suspicious or credential-harvesting keywords. Has an unusually high number of subdomains (3). Contains misleading brand names or keywords in subdomains.",
+        "features": {
+          "domain": "scammer-verification.net",
+          "has_credentials": false,
+          "has_misleading_subdomain": true,
+          "hostname_length": 41,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 2,
+          "num_subdomains": 3,
+          "special_chars": 1,
+          "unusual_port": false,
+          "url_length": 54
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            0.4
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ],
+          [
+            "rule_misleading_subdomain",
+            0.35
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.9,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 90,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            0.4
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ],
+          [
+            "rule_misleading_subdomain",
+            0.35
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://login.paypal.com.scammer-website.net/secure": {
+      "legacy": {
+        "confidence": 0.9,
+        "explanation": "Suspicious URL identified. Contains 2 suspicious or credential-harvesting keywords. Has an unusually high number of subdomains (3). Contains misleading brand names or keywords in subdomains.",
+        "features": {
+          "domain": "scammer-website.net",
+          "has_credentials": false,
+          "has_misleading_subdomain": true,
+          "hostname_length": 36,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 2,
+          "num_subdomains": 3,
+          "special_chars": 1,
+          "unusual_port": false,
+          "url_length": 51
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            0.4
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ],
+          [
+            "rule_misleading_subdomain",
+            0.35
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.9,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 90,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            0.4
+          ],
+          [
+            "rule_many_subdomains",
+            0.15
+          ],
+          [
+            "rule_misleading_subdomain",
+            0.35
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://my.very.long.subdomain.legitimate.com": {
+      "legacy": {
+        "confidence": 0.15,
+        "explanation": "URL appears benign. Has an unusually high number of subdomains (4).",
+        "features": {
+          "domain": "legitimate.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 37,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 4,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 45
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.15,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 15,
+        "rules": [
+          [
+            "rule_many_subdomains",
+            0.15
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://www.example.com/account/login?verify=1&update=1&secure=1&password=1&auth=1&confirm=1&support=1&banking=1": {
+      "legacy": {
+        "confidence": 0.99,
+        "explanation": "Suspicious URL identified. Contains 10 suspicious or credential-harvesting keywords. URL length is unusually long. Contains many special characters, often used for obfuscation.",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 15,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 10,
+          "num_subdomains": 1,
+          "special_chars": 16,
+          "unusual_port": false,
+          "url_length": 112
+        },
+        "is_phishing": true,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            2.0
+          ],
+          [
+            "rule_long_url",
+            0.1
+          ],
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "phishing",
+        "confidence": 0.99,
+        "is_phishing": true,
+        "open_redirect_detected": false,
+        "path_depth": 2,
+        "risk_score": 99,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            2.0
+          ],
+          [
+            "rule_long_url",
+            0.1
+          ],
+          [
+            "rule_special_chars",
+            0.1
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://www.github.com": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "github.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 14,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 1,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 22
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.0,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 0,
+        "rules": [],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://www.google.com/": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "google.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 14,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 1,
+          "special_chars": 0,
+          "unusual_port": false,
+          "url_length": 23
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.0,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 0,
+        "risk_score": 0,
+        "rules": [],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://www.google.com/search?q=cybersecurity": {
+      "legacy": {
+        "confidence": 0.0,
+        "explanation": "URL appears benign.",
+        "features": {
+          "domain": "google.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 14,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": false,
+          "keyword_count": 0,
+          "num_subdomains": 1,
+          "special_chars": 2,
+          "unusual_port": false,
+          "url_length": 45
+        },
+        "is_phishing": false,
+        "rules": []
+      },
+      "tiered": {
+        "classification": "legitimate",
+        "confidence": 0.0,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 0,
+        "rules": [],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    },
+    "https://xn--bcher-kva.example.com/login": {
+      "legacy": {
+        "confidence": 0.5,
+        "explanation": "URL appears benign. Contains 1 suspicious or credential-harvesting keywords. Uses Punycode (often used in homograph attacks).",
+        "features": {
+          "domain": "example.com",
+          "has_credentials": false,
+          "has_misleading_subdomain": false,
+          "hostname_length": 25,
+          "is_https": true,
+          "is_ip": false,
+          "is_punycode": true,
+          "keyword_count": 1,
+          "num_subdomains": 1,
+          "special_chars": 3,
+          "unusual_port": false,
+          "url_length": 39
+        },
+        "is_phishing": false,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_punycode",
+            0.3
+          ]
+        ]
+      },
+      "tiered": {
+        "classification": "suspicious",
+        "confidence": 0.5,
+        "is_phishing": false,
+        "open_redirect_detected": false,
+        "path_depth": 1,
+        "risk_score": 50,
+        "rules": [
+          [
+            "rule_suspicious_keywords",
+            0.2
+          ],
+          [
+            "rule_punycode",
+            0.3
+          ]
+        ],
+        "scheme": "https",
+        "suspicious_tld": false
+      }
+    }
+  }
+}
