@@ -85,15 +85,24 @@ Risk is dynamically calculated server-side based on the aggregated detection con
 
 **Formula:**
 ```text
-raw_total =
-    rule_term
-    + multi_signal_bonus
-    + ml_confidence_term
-    + agreement_bonus
-    + severity_term
+rule_term          = 40 if the rule engine fired any label, else 0
+multi_signal_bonus = min(30, 15 × (distinct_rule_labels − 1))
+ml_confidence_term = 40 × top ML confidence
+agreement_bonus    = 10 if a rule label and an ML label coincide, else 0
+severity_term      = clamp(10 × (4 − average_severity) / 3, 0, 10)
 
+raw_total  = rule_term + multi_signal_bonus + ml_confidence_term
+             + agreement_bonus + severity_term
 final_score = int(round(clamp(raw_total, 0, 100)))
 ```
+
+**Double-counting rule (paper Section IV-E):** "When rule and ML agree, only the larger of r and
+c is kept to avoid double counting." So whenever at least one label is produced by *both* the
+rule engine and the ML model, `rule_term` and `ml_confidence_term` are replaced by `max(r, c)`
+before the sum; the agreement bonus `a` is still added. Both raw values remain visible under
+`terms_pre_suppression` in the API payload. Two consequences, both asserted by
+`tests/test_risk_engine.py`: an agreeing port scan at maximum severity scores exactly **60
+(HIGH)**, and a rule-only session cannot exceed **80**, so CRITICAL requires rule-ML agreement.
 
 **Multi-signal bonus:**
 ```text
@@ -160,10 +169,10 @@ Feedback (New telemetry data)
 ### Lifecycle & Mechanics
 - **LearningExample Pipeline**: The system tracks Suricata `eve.json` alerts.
 - **Data Quality Controls**: The system validates class distribution and strictly enforces minimum sample counts before training.
-- **Feature Extraction**: Features include `distinct_dest_ports`, `events_per_second`, and `protocol_diversity`. Ground truth is labeled independently via IDS signatures to eliminate feature/label leakage.
+- **Feature Extraction**: Five behavioural features, declared once in `ml/features.py::FEATURE_NAMES` and validated for name, order, unit and range before they reach the estimator: `distinct_dest_ports`, `events_per_second`, `distinct_dest_ips`, `avg_severity`, `protocol_diversity`. Ground truth is labeled independently via IDS signatures to eliminate feature/label leakage.
 - **Candidate Model Training**: When sufficient new data is gathered, a candidate Random Forest model is trained.
 - **Evaluation & Acceptance Gate**: Candidate models are evaluated on held-out data before activation. Model promotion is controlled by an explicit F1-based acceptance gate (`candidate_f1 > 0.85` and `candidate_f1 >= previous_active_f1`).
-- **Model Versioning & History**: Accepted models are persisted (e.g. `v_20261007_xyz.joblib`) with their adaptation decisions recorded. Rejected candidates do not replace the active model but are kept in history for transparency.
+- **Model Versioning & History**: Accepted models are persisted (e.g. `v_20261007_xyz.joblib`) with their adaptation decisions recorded. A rejected candidate never replaces the active model, and since the reconstruction it is not written to disk at all - the old code path dumped every candidate before the gate, leaving ~100 untraceable `v_*.joblib` files that the registry now refuses to load because they carry no provenance sidecar.
 - **Model Rollback**: Operators can roll back inference to any previously accepted model version.
 - **Active Model Management**: Future port-scan inference dynamically queries the active model database and uses the accepted version.
 
@@ -322,8 +331,17 @@ frontend/
 
 The project has undergone rigorous automated testing to ensure architectural integrity:
 
-- **Backend:** 26/26 tests passed.
-- **Frontend:** Production build passed with zero TypeScript errors.
+- **Backend:** 694 tests passing across 29 modules (`pytest -q`, 26.8 s).
+- **Frontend:** 72 tests passing across 18 files (`vitest run`, 12.9 s).
+- **TypeScript:** `tsc --noEmit` exits 0 under `strict` with `noUnusedLocals`.
+- **Production build:** `vite build` exits 0, with one large-chunk advisory.
+
+Reproduce them with:
+
+```powershell
+cd backend; .\venv\Scripts\python.exe -m pytest -q
+cd ..\frontend; npm run test; npm run build   # build runs `tsc && vite build`
+```
 
 Testing covers:
 - Simulation constraints
