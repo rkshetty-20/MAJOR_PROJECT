@@ -191,8 +191,10 @@ trigger conditions (Table I), the nine rule confidences (Table I), the 15/4/5 pa
 (Table II), the four anomaly scorers over 14 features, the Random Forest's 100 trees / depth 6 /
 five features, the ten phishing weights with cap 0.99 and threshold 0.65, equations (1)-(3), the
 HMAC chain, the trainee-engine thresholds, the F1 > 0.85 gate with ≥10 examples, ≥2 per class and
-a stratified 75/25 split, "more than 50 endpoints in 12 routers" (measured 70 in 12) and
-"16 tables" (measured 16). All of those held. Four things did not.
+a stratified 75/25 split, "more than 50 endpoints in 12 routers" (measured 70 declared route handlers in
+12 routers; `/openapi.json` documents 68 of them because `chat.py` hides two legacy `/chat`
+aliases with `include_in_schema=False`) and "16 tables" (measured 16). All of those held. Four
+things did not.
 
 | # | Finding | Correction |
 |---|---|---|
@@ -217,6 +219,12 @@ not be presented as measured results in the review.
 500 kB chunk advisory. No test was deleted or skipped to reach those numbers: the three risk
 assertions that encoded the old behaviour were corrected, and five tests were added. Committed
 as `e28c1be` on `reconstruction`, working tree clean.
+
+**The application was also started, not just tested.** `uvicorn app.main:app --host 127.0.0.1
+--port 8011` came up without an import error, `GET /api/system/config` returned `200` with
+`{"health": {"database": "connected", "api": "online"}}`, `integrity.hmac_configured: true`
+and `detection.phishing_threshold: 0.65` straight from the live process, and `GET /openapi.json`
+served 68 operations over 68 paths. The process was then stopped.
 
 **Still open, deliberately.** (a) The paper's figures 1-8 are raster images, so their numbers were
 verified through the prose and tables that describe them, not by reading the images. (b) The
