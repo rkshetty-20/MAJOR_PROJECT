@@ -13,18 +13,18 @@
 | Health endpoint `/health` | `app/main.py` | ✅ Working | Verified |
 | 10-scenario catalog | `app/services/simulation_service.py` | ✅ All 10 scenarios complete | `test_simulation.py::test_11` |
 | Synthetic simulation engine | `app/services/simulation_service.py` | ✅ Working | `test_simulation.py::test_02-07` |
-| Rule-based detection (9 behavioral rules) | `app/services/rule_engine.py` | ✅ Working | `test_rule_engine.py` (8/8 passed) |
+| Rule-based detection (9 behavioral rules) | `app/services/rule_engine.py` | ✅ Working | `test_rule_engine.py` (11 tests) |
 | Phishing URL lexical scorer (10 registered indicators, per-indicator cap 0.60) | `app/services/phishing/` (façade: `app/services/phishing_detector.py`) | ✅ Declared lexicon, offline by construction, self-describing | `tests/test_phishing_lexical.py` (92), `tests/test_phishing_golden_replay.py` (19), `test_phishing_detector.py` (14), `test_phishing_suite.py` (15) |
 | Packet-level IDS (24 rules: 15 sig, 4 thr, 5 stateful) | `app/services/ids/rules_engine.py` | ✅ 24 rules, each contract-validated and individually tested | `tests/test_ids_rules.py` (148), `tests/test_ids_golden_replay.py` (378 locked streams) |
 | Packet anomaly proxies (4 deterministic scorers x 14 features) | `app/services/ids/anomaly_scorer.py` | ✅ Deterministic proxies, explicitly not trained models | `tests/test_ids_anomaly.py` (135) |
 | Random Forest port-scan ML | `app/services/ml_engine.py`, `ml/registry.py`, `ml/features.py` | ✅ Trained, versioned, provenance-attested | `test_ml_model_lifecycle.py` (37) |
 | Risk fusion engine (0-100 score) | `app/services/risk_engine.py` | ✅ Working | `test_simulation.py::test_09` |
-| HMAC-SHA-256 evidence integrity | `app/services/integrity_service.py` | ✅ Working | `test_e2e_full.py` |
+| HMAC-SHA-256 evidence integrity | `app/services/integrity_service.py` | ✅ Working | `test_integrity_service.py` (11) |
 | Hash chain (per-session) | `app/models/models.py` | ✅ Working | After-insert listener |
 | Database persistence (SQLite/SQLAlchemy) | `app/database.py` + models | ✅ Working | Full test suite |
-| Simulation history endpoint `/api/simulation/history` | `app/routers/simulation.py` | ✅ Working | `test_simulation.py::test_21` |
-| Dynamic scenario replay orchestrator | `app/services/simulation_service.py` | ✅ Working | `test_simulation.py::test_22` |
-| Simulation-outcome adaptive recommendation | `app/routers/simulation.py` | ✅ Working | `test_simulation.py::test_20` |
+| Simulation history endpoint `/api/simulation/history` | `app/routers/simulation.py` | ✅ Working | `test_simulation.py::test_21_simulation_history_endpoint` |
+| Dynamic scenario replay orchestrator | `app/services/simulation_service.py` | ✅ Working | `test_simulation.py::test_22_dataset_replay_dynamic_scenario` |
+| Simulation-outcome adaptive recommendation | `app/routers/simulation.py` | ✅ Working | `test_simulation.py::test_20_simulation_outcome_adaptive_recommendation` |
 | ML retraining with F1 gate (>0.85) | `app/services/ml_engine.py` | ✅ Working | Retraining pipeline |
 | Model versioning + rollback | `app/services/ml_engine.py` | ✅ Working | Rollback tests |
 | SOC dashboard API endpoints | `app/routers/simulation.py` | ✅ Working | `test_simulation.py::test_12-14` |
@@ -70,7 +70,7 @@
 - **Backend Pytest:** **691 passed**, 0 failures across 29 test modules (measured 2026-10-27 on branch `reconstruction`).
   History: 189 at the pre-reconstruction baseline (`ebaac9f`) -> 232 after stages B/D/F -> 521 after stage C -> 632 after stage E (`test_phishing_lexical.py` 92, `test_phishing_golden_replay.py` 19) -> 691 after stage A (`test_scenario_telemetry_contract.py` 59).
 - **Frontend Vitest:** **70 passed**, 0 failures across 18 test files; `tsc --noEmit` clean (`strict`, `noUnusedLocals`).
-- **Frontend Vite Build:** **1692 modules transformed**, 0 TypeScript errors, bundle generated in 36s.
+- **Frontend Vite Build:** **1692 modules transformed**, 0 TypeScript errors, built in 24.9s (measured 2026-10-27 on branch `reconstruction`). Vite reports one chunk above its 500 kB advisory limit (`assets/index-*.js`, 609 kB / 155 kB gzipped) - an advisory warning, not an error.
 
 ---
 
