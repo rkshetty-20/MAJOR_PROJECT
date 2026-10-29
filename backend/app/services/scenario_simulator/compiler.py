@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.models import Dataset
 from app.services.scenario_simulator.generator import GENERATOR_VERSION
 from app.services.scenario_simulator.spec import (
+    SYNTHETIC_NO_SIGNATURE,
     GroundTruthSource,
     ScenarioSpec,
 )
@@ -85,7 +86,7 @@ def _build_network_event(spec: ScenarioSpec, template, port: int, src: str, dst:
         "dest_port": int(features.get("dest_port", port)),
         "protocol": str(features.get("protocol", "TCP")),
         "severity": int(features.get("severity", 2)),
-        "raw_signature": str(features.get("raw_signature", "ET SCAN Possible Nmap User-Agent Observed")),
+        "raw_signature": str(features.get("raw_signature", SYNTHETIC_NO_SIGNATURE)),
         "payload": {
             "scan_type": features.get("scan_type", "SYN_STEALTH"),
             "distinct_dest_ports": features.get("distinct_dest_ports"),
@@ -96,9 +97,29 @@ def _build_network_event(spec: ScenarioSpec, template, port: int, src: str, dst:
 
 def _build_auth_event(spec: ScenarioSpec, template, src: str, target: str, ts: str) -> Dict[str, Any]:
     features = template.features or {}
-    # Prefer an explicit observable event_type; otherwise infer a benign/attack
-    # default from the scenario label WITHOUT leaking the label into the event.
-    event_type = str(features.get("event_type") or ("failed_authentication" if template.ground_truth_label == 1 else "baseline_login"))
+    # The observable event_type MUST be authored on the template.
+    #
+    # An earlier revision fell back to ``"failed_authentication" if
+    # template.ground_truth_label == 1 else "baseline_login"``, with a comment
+    # claiming it did not leak the label. It did: it made "label == 1" and
+    # "event_type == failed_authentication" the same fact, so a detector (or any
+    # model trained on the compiled dataset) could recover the ground truth by
+    # reading a single observable field. That is measurement without independence,
+    # so the compiler now refuses to guess and the author must declare the
+    # observable. ``validate_scenario_feasibility`` reports the same problem as a
+    # repairable violation before compilation is attempted.
+    event_type = features.get("event_type")
+    if not event_type:
+        raise CompilationError(
+            f"Auth template '{template.template_id}' must declare features.event_type "
+            "(for example failed_login, successful_login or baseline_login). The compiler "
+            "never infers an observable from the ground-truth label."
+        )
+    event_type = str(event_type)
+    status = features.get("status")
+    if status is None:
+        # Derived from the observable itself, never from the label.
+        status = "failed" if "failed" in event_type else "success"
     return {
         "type": "auth",
         "event_type": event_type,
@@ -108,7 +129,7 @@ def _build_auth_event(spec: ScenarioSpec, template, src: str, target: str, ts: s
         "device": str(features.get("device", "Chrome 122 / Windows 11")),
         "payload": {
             "auth_method": features.get("auth_method", "password"),
-            "status": features.get("status", "failed" if "failed" in event_type else "success"),
+            "status": status,
         },
         "_template_id": template.template_id,
     }

@@ -49,6 +49,12 @@ MAX_EXPECTED_DETECTIONS = 12
 MAX_LLM_OUTPUT_TOKENS = 2048
 MAX_VALIDATION_REPAIR_ATTEMPTS = 2  # bounded repair; never retry indefinitely
 
+#: Marker emitted for a network event whose template declared no ``raw_signature``.
+#: It is deliberately not a vendor signature: defaulting an undeclared event to
+#: "ET SCAN Possible Nmap User-Agent Observed" fabricates exactly the observable a
+#: signature-based detector looks for, and puts it on benign baseline traffic too.
+SYNTHETIC_NO_SIGNATURE = "SYNTHETIC no-signature-declared"
+
 
 # ==========================================
 # Enums
@@ -92,7 +98,12 @@ class StageType(str, enum.Enum):
 
 
 class GroundTruthSource(str, enum.Enum):
-    """How a trusted label is derived. Never from the detector being evaluated."""
+    """How a trusted label is derived. Never from the detector being evaluated.
+
+    This is a *closed* enum, so "rule_output", "ml_prediction" or
+    "detection_score" cannot even be expressed by a spec - the label source is
+    rejected by the schema rather than by a downstream string comparison.
+    """
 
     IDS_SIGNATURE = "ids_signature"        # e.g. Suricata "ET SCAN" signature
     SCENARIO_DESIGN = "scenario_design"    # deterministic, seeded label policy

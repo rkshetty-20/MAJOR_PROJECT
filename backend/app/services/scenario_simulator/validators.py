@@ -27,6 +27,7 @@ from typing import List, Optional
 
 from app.services.scenario_simulator.spec import (
     AttackCategory,
+    EventCategory,
     ScenarioSpec,
 )
 
@@ -167,6 +168,20 @@ _IP_ENTITY_KINDS = {"source_ip", "dest_ip", "src_ip", "ip"}
 # entity kinds whose "value" must be a synthetic host/domain/URL
 _URL_ENTITY_KINDS = {"url", "domain", "host"}
 
+# Feature keys that restate the ground truth instead of describing the event.
+# A feature bag is supposed to hold only observable values; a key such as
+# ``ground_truth_label`` or ``is_attack`` next to the observables hands the label
+# to any model that trains on the compiled dataset.
+_LABEL_FEATURE_KEYS = frozenset({
+    "label", "labels", "ground_truth", "ground_truth_label", "groundtruth",
+    "is_attack", "is_malicious", "is_phishing", "malicious", "attack",
+    "class", "target_class", "target_label", "y_true", "y",
+})
+
+
+def _names_the_label(key: str) -> bool:
+    return str(key).strip().lower() in _LABEL_FEATURE_KEYS
+
 
 def validate_scenario_safety(spec: ScenarioSpec) -> ValidationReport:
     """Audit the returned spec for unsafe or non-synthetic content."""
@@ -210,16 +225,43 @@ def validate_scenario_safety(spec: ScenarioSpec) -> ValidationReport:
                     )
                 )
 
-    # Ground-truth integrity: detector output must never be the label source.
+    # Ground-truth integrity.
+    #
+    # The label *source* cannot be a detector output: ``GroundTruthSource`` is a
+    # closed enum, so a spec that tries to declare "rule_output", "ml_prediction"
+    # or "detection_score" is rejected by ``ScenarioSpec`` itself before this
+    # module runs (proved in tests/test_scenario_telemetry_contract.py). The check
+    # that used to live here compared ``t.ground_truth_source.value`` against
+    # exactly those three strings - values the enum cannot hold - so it could never
+    # fire and its "label_leakage" code was a guard in name only.
+    #
+    # What can still leak is the label being *observable*, so the reachable forms
+    # are checked instead: a feature key that names the label, and an auth template
+    # that leaves its observable event_type for the compiler to guess from the
+    # label (which the compiler no longer does).
     for t in spec.event_templates:
-        if t.ground_truth_source.value in ("rule_output", "ml_prediction", "detection_score"):
+        features = t.features or {}
+        leaked = sorted(str(k) for k in features if _names_the_label(k))
+        if leaked:
             report.violations.append(
                 ValidationViolation(
-                    code="label_leakage",
+                    code="label_key_leakage",
                     message=(
-                        f"Event template '{t.template_id}' derives ground truth from the detector "
-                        "being evaluated. Labels must come from IDS signature, scenario design, "
-                        "or heuristic policy."
+                        f"Event template '{t.template_id}' carries label-naming feature key(s) "
+                        f"{leaked}. Feature values must be observable only; the ground truth "
+                        "belongs to ground_truth_label/ground_truth_source."
+                    ),
+                    location=f"event_template:{t.template_id}",
+                )
+            )
+        if t.event_category == EventCategory.AUTH and not features.get("event_type"):
+            report.violations.append(
+                ValidationViolation(
+                    code="missing_observable_event_type",
+                    message=(
+                        f"Auth event template '{t.template_id}' must declare features.event_type "
+                        "(for example failed_login or baseline_login). It is never inferred from "
+                        "the ground-truth label, because that would make the label observable."
                     ),
                     location=f"event_template:{t.template_id}",
                 )
@@ -279,6 +321,39 @@ def _check_port_scan_feasibility(spec: ScenarioSpec, report: ValidationReport) -
                 location="event_templates",
             )
         )
+
+    # Warn - never fabricate - when a network template leaves an observable to the
+    # compiler's defaults: a missing dest_port is rotated across the canonical port
+    # list, and a missing raw_signature is emitted as an explicit
+    # "SYNTHETIC no-signature-declared" marker rather than a vendor signature.
+    for t in spec.event_templates:
+        if t.event_category != EventCategory.NETWORK:
+            continue
+        features = t.features or {}
+        if "dest_port" not in features:
+            report.warnings.append(
+                ValidationViolation(
+                    code="no_declared_dest_port",
+                    message=(
+                        f"Network template '{t.template_id}' declares no dest_port; the compiler "
+                        "distributes destinations across the canonical service-port list, which can "
+                        "look like scanning even for benign traffic."
+                    ),
+                    location=f"event_template:{t.template_id}",
+                )
+            )
+        if "raw_signature" not in features:
+            report.warnings.append(
+                ValidationViolation(
+                    code="no_declared_signature",
+                    message=(
+                        f"Network template '{t.template_id}' declares no raw_signature; the emitted "
+                        "event will carry 'SYNTHETIC no-signature-declared' (no vendor signature is "
+                        "invented for it)."
+                    ),
+                    location=f"event_template:{t.template_id}",
+                )
+            )
 
 
 def _check_auth_feasibility(spec: ScenarioSpec, report: ValidationReport) -> None:

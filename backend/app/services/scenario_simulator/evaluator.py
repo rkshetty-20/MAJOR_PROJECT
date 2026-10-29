@@ -39,7 +39,7 @@ from app.models import (
 )
 from app.services.ml_engine import evaluate_ml
 from app.services.rule_engine import evaluate_rules
-from app.services.scenario_simulator.spec import ScenarioSpec
+from app.services.scenario_simulator.spec import SYNTHETIC_NO_SIGNATURE, ScenarioSpec
 
 logger = logging.getLogger(__name__)
 
@@ -149,16 +149,29 @@ class ReplayError(ValueError):
     """Raised when a dataset cannot be replayed (missing artifacts, bad payload)."""
 
 
-def _parse_ts(value: Any) -> datetime:
+def _parse_ts(value: Any, index: Optional[int] = None) -> datetime:
+    """Parse a compiled timestamp, refusing to invent one.
+
+    This used to fall back to ``datetime.now(timezone.utc)``. In a replay path that
+    is the worst possible default: a corrupted payload silently becomes "traffic
+    that happened just now", so the replay stops being reproducible and the
+    corruption stays invisible. A missing or unparsable timestamp is a defect in
+    the dataset, so it is raised instead of being papered over.
+    """
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
     if isinstance(value, str):
         try:
             dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
         except ValueError:
-            pass
-    return datetime.now(timezone.utc)
+            dt = None
+        if dt is not None:
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    where = f"Event {index}" if index is not None else "Event"
+    raise ReplayError(
+        f"{where} has no parsable timestamp ({value!r}); replay refuses to substitute "
+        "wall-clock time because the compiled payload is meant to be deterministic."
+    )
 
 
 def _resolve_scenarios(db: Session) -> Dict[str, int]:
@@ -177,14 +190,14 @@ def _resolve_scenarios(db: Session) -> Dict[str, int]:
 
 def _materialize_events(events: List[Dict[str, Any]], session_id: int, category: str, simulation_id: str, db: Session) -> int:
     created = 0
-    for ev in events:
+    for index, ev in enumerate(events):
         etype = ev.get("type")
-        ts = _parse_ts(ev.get("timestamp"))
+        ts = _parse_ts(ev.get("timestamp"), index)
         if etype == "network":
             db.add(
                 SuricataEvent(
                     session_id=session_id,
-                    raw_signature=str(ev.get("raw_signature", "ET SCAN Synthetic")),
+                    raw_signature=str(ev.get("raw_signature", SYNTHETIC_NO_SIGNATURE)),
                     src_ip=str(ev.get("src_ip", "unknown")),
                     dest_ip=str(ev.get("dest_ip", "unknown")),
                     dest_port=int(ev["dest_port"]) if ev.get("dest_port") is not None else None,

@@ -1,0 +1,279 @@
+{
+  "cases": {
+    "brute_force|seed303": {
+      "dataset_id": "ds_scn_scn_tc_brute_seed303",
+      "dataset_role": "validation",
+      "dest_ips": [],
+      "event_kinds": {
+        "failed_login": 6,
+        "successful_login": 1
+      },
+      "events_count": 7,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "scenario_design",
+        "scenario_design"
+      ],
+      "labels": [
+        1,
+        1
+      ],
+      "payload_sha256": "1c90fb216565075886a2b15e9fefa0ab46c828ee0e3b3794ecfc36564f7db5df",
+      "raw_signatures": [],
+      "seed": 303,
+      "sources": [
+        "198.51.100.25"
+      ],
+      "src_ips": [],
+      "targets": [
+        "svc_account"
+      ],
+      "timestamp_max": "2024-01-01T00:00:12.010000+00:00",
+      "timestamp_min": "2024-01-01T00:00:00+00:00"
+    },
+    "brute_force|seed303|label0": {
+      "dataset_id": "ds_scn_scn_tc_brute_seed303",
+      "dataset_role": "validation",
+      "dest_ips": [],
+      "event_kinds": {
+        "failed_login": 6,
+        "successful_login": 1
+      },
+      "events_count": 7,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "scenario_design",
+        "scenario_design"
+      ],
+      "labels": [
+        0,
+        0
+      ],
+      "payload_sha256": "1c90fb216565075886a2b15e9fefa0ab46c828ee0e3b3794ecfc36564f7db5df",
+      "raw_signatures": [],
+      "seed": 303,
+      "sources": [
+        "198.51.100.25"
+      ],
+      "src_ips": [],
+      "targets": [
+        "svc_account"
+      ],
+      "timestamp_max": "2024-01-01T00:00:12.010000+00:00",
+      "timestamp_min": "2024-01-01T00:00:00+00:00"
+    },
+    "credential_stuffing|seed202": {
+      "dataset_id": "ds_scn_scn_tc_stuff_seed202",
+      "dataset_role": "validation",
+      "dest_ips": [],
+      "event_kinds": {
+        "failed_authentication": 6
+      },
+      "events_count": 6,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "scenario_design"
+      ],
+      "labels": [
+        1
+      ],
+      "payload_sha256": "b6f37c6bff56262f09b86dccfee7003739ec23be4bc3a107cd472158fd5764ae",
+      "raw_signatures": [],
+      "seed": 202,
+      "sources": [
+        "203.0.113.88"
+      ],
+      "src_ips": [],
+      "targets": [
+        "acct_130",
+        "acct_147",
+        "acct_222",
+        "acct_228",
+        "acct_232",
+        "acct_97"
+      ],
+      "timestamp_max": "2024-01-01T00:00:15+00:00",
+      "timestamp_min": "2024-01-01T00:00:10+00:00"
+    },
+    "phishing_url|seed505": {
+      "dataset_id": "ds_scn_scn_tc_phish_seed505",
+      "dataset_role": "validation",
+      "dest_ips": [],
+      "event_kinds": {
+        "phishing_url": 2
+      },
+      "events_count": 2,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "heuristic_policy"
+      ],
+      "labels": [
+        1
+      ],
+      "payload_sha256": "3829f83e982cf166cc39340a391681aefbeb47702ad1035cab0d402785d68c52",
+      "raw_signatures": [],
+      "seed": 505,
+      "sources": [
+        "10.0.0.202"
+      ],
+      "src_ips": [],
+      "targets": [
+        "http://portal-verify.internal-update.invalid/auth/login"
+      ],
+      "timestamp_max": "2024-01-01T00:00:02+00:00",
+      "timestamp_min": "2024-01-01T00:00:01+00:00"
+    },
+    "port_scan|fallback_ids|seed101": {
+      "dataset_id": "ds_scn_scn_tc_port_fallback_seed101",
+      "dataset_role": "validation",
+      "dest_ips": [
+        "192.0.2.50"
+      ],
+      "event_kinds": {
+        "network": 18
+      },
+      "events_count": 18,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "ids_signature"
+      ],
+      "labels": [
+        1
+      ],
+      "payload_sha256": "914c3e4eee3e3c24dcc45bce3833e2d33b0bb378e1d0b80d9a258c9c0f6138e3",
+      "raw_signatures": [
+        "SYNTHETIC no-signature-declared"
+      ],
+      "seed": 101,
+      "sources": [],
+      "src_ips": [
+        "10.0.0.215"
+      ],
+      "targets": [],
+      "timestamp_max": "2024-01-01T00:00:08.400000+00:00",
+      "timestamp_min": "2024-01-01T00:00:05+00:00"
+    },
+    "port_scan|fallback_ids|seed7": {
+      "dataset_id": "ds_scn_scn_tc_port_fallback_seed7",
+      "dataset_role": "validation",
+      "dest_ips": [
+        "192.0.2.233"
+      ],
+      "event_kinds": {
+        "network": 18
+      },
+      "events_count": 18,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "ids_signature"
+      ],
+      "labels": [
+        1
+      ],
+      "payload_sha256": "098949519517cc979fcf9bc7c2219008f025edb353fcef872b1cd4fae9e9b9c3",
+      "raw_signatures": [
+        "SYNTHETIC no-signature-declared"
+      ],
+      "seed": 7,
+      "sources": [],
+      "src_ips": [
+        "10.0.0.11"
+      ],
+      "targets": [],
+      "timestamp_max": "2024-01-01T00:00:08.400000+00:00",
+      "timestamp_min": "2024-01-01T00:00:05+00:00"
+    },
+    "port_scan|seed101": {
+      "dataset_id": "ds_scn_scn_tc_port_seed101",
+      "dataset_role": "validation",
+      "dest_ips": [
+        "192.0.2.10"
+      ],
+      "event_kinds": {
+        "network": 18
+      },
+      "events_count": 18,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "ids_signature"
+      ],
+      "labels": [
+        1
+      ],
+      "payload_sha256": "b41045016ac4a92f97b0854d52b59ec968500520a5ac8179c5bdaa045558346a",
+      "raw_signatures": [
+        "SYNTHETIC no-signature-declared"
+      ],
+      "seed": 101,
+      "sources": [],
+      "src_ips": [
+        "10.0.0.50"
+      ],
+      "targets": [],
+      "timestamp_max": "2024-01-01T00:00:08.400000+00:00",
+      "timestamp_min": "2024-01-01T00:00:05+00:00"
+    },
+    "port_scan|seed101|declared_signature": {
+      "dataset_id": "ds_scn_scn_tc_port_seed101",
+      "dataset_role": "validation",
+      "dest_ips": [
+        "192.0.2.10"
+      ],
+      "event_kinds": {
+        "network": 18
+      },
+      "events_count": 18,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "ids_signature"
+      ],
+      "labels": [
+        1
+      ],
+      "payload_sha256": "ff3ed02e264b3f61913a2e2cad0ca4cbcd27946f9f0223c133a8d499359ece3a",
+      "raw_signatures": [
+        "ET SCAN Possible Nmap User-Agent Observed"
+      ],
+      "seed": 101,
+      "sources": [],
+      "src_ips": [
+        "10.0.0.50"
+      ],
+      "targets": [],
+      "timestamp_max": "2024-01-01T00:00:08.400000+00:00",
+      "timestamp_min": "2024-01-01T00:00:05+00:00"
+    },
+    "port_scan|seed7": {
+      "dataset_id": "ds_scn_scn_tc_port_seed7",
+      "dataset_role": "validation",
+      "dest_ips": [
+        "192.0.2.10"
+      ],
+      "event_kinds": {
+        "network": 18
+      },
+      "events_count": 18,
+      "generator_version": "scenario-studio-1.0",
+      "label_sources": [
+        "ids_signature"
+      ],
+      "labels": [
+        1
+      ],
+      "payload_sha256": "b41045016ac4a92f97b0854d52b59ec968500520a5ac8179c5bdaa045558346a",
+      "raw_signatures": [
+        "SYNTHETIC no-signature-declared"
+      ],
+      "seed": 7,
+      "sources": [],
+      "src_ips": [
+        "10.0.0.50"
+      ],
+      "targets": [],
+      "timestamp_max": "2024-01-01T00:00:08.400000+00:00",
+      "timestamp_min": "2024-01-01T00:00:05+00:00"
+    }
+  },
+  "comment": "Locked synthetic-telemetry baseline for the Attack Scenario Studio compiler. Each digest is produced from tests/telemetry_corpus.py by the deterministic compiler; replay is asserted by tests/test_scenario_telemetry_contract.py. Regenerate only with a deliberate, documented change to generation semantics.",
+  "schema_version": "1.0"
+}
