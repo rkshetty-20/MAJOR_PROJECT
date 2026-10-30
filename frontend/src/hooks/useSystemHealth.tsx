@@ -4,6 +4,24 @@ import api, { type SystemConfig } from '../api';
 export type ServiceStatus = 'checking' | 'connected' | 'degraded' | 'disconnected';
 export type SubsystemStatus = 'ready' | 'unavailable' | 'unknown';
 
+/**
+ * The values ``GET /api/system/config`` actually returns for a healthy core.
+ *
+ * ``app/routers/system.py`` reports ``{"database": "connected", "api": "online"}``
+ * and ``{"database": "error", "api": "online"}`` when the DB probe fails. This
+ * used to be compared against ``'ok'``, which the backend never emits, so the
+ * sidebar badge reported "Degraded" permanently while every request returned 200.
+ * ``'ok'`` is still accepted so older fixtures keep working.
+ */
+const HEALTHY_API = ['online', 'ok'];
+const HEALTHY_DATABASE = ['connected', 'ok'];
+
+export function isCoreHealthy(cfg?: Pick<SystemConfig, 'health'> | null): boolean {
+  const api = String(cfg?.health?.api ?? '').toLowerCase();
+  const database = String(cfg?.health?.database ?? '').toLowerCase();
+  return HEALTHY_API.includes(api) && HEALTHY_DATABASE.includes(database);
+}
+
 export interface SystemHealthValue {
   /** Overall connectivity + service health, derived from real responses only. */
   status: ServiceStatus;
@@ -76,7 +94,7 @@ export const SystemHealthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         hmacConfigured: cfg?.integrity?.hmac_configured ?? null,
       });
 
-      const coreHealthy = cfg?.health?.api === 'ok' && cfg?.health?.database === 'ok';
+      const coreHealthy = isCoreHealthy(cfg);
       // An untrained model (ml unavailable) is a valid state, not degraded — only
       // a broken core (api/database not ok) or a failed integrity service degrades.
       setStatus(coreHealthy ? 'connected' : 'degraded');

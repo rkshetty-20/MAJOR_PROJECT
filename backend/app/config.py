@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     OPENROUTER_MODEL: str = "meta-llama/llama-3.3-70b-instruct"
     EVIDENCE_HMAC_KEY: str = ""
 
+    # Comma-separated browser origins allowed to call this API. Only needed when
+    # the dashboard is served from a different origin (e.g. the Vite dev server);
+    # the production build served by this app is same-origin and needs no entry.
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",

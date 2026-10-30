@@ -1,8 +1,9 @@
 import axios from 'axios';
+import { API_BASE_URL } from './apiBase';
 
 // Backend base URL configured via VITE_API_URL environment variable
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -354,8 +355,7 @@ export async function streamChat(
   },
   abortSignal?: AbortSignal
 ) {
-  const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  const url = `${baseURL}/api/chat/stream`;
+  const url = `${API_BASE_URL}/api/chat/stream`;
 
   try {
     const response = await fetch(url, {

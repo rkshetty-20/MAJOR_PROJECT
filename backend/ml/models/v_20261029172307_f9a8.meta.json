@@ -1,0 +1,45 @@
+{
+  "artifact_filename": "v_20261029172307_f9a8.joblib",
+  "data_random_seed": 42,
+  "evaluation": {
+    "accuracy": 1.0,
+    "confusion_matrix": {
+      "fn": 0,
+      "fp": 0,
+      "tn": 21,
+      "tp": 1
+    },
+    "f1_score": 1.0,
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "feature_names": [
+    "distinct_dest_ports",
+    "events_per_second",
+    "distinct_dest_ips",
+    "avg_severity",
+    "protocol_diversity"
+  ],
+  "feature_schema_version": "1.0",
+  "limitations": "Reported metrics are measured on a synthetic hold-out whose labels are derived from the scenario generator's own signatures. Perfect synthetic accuracy does not establish real-world generalization and must not be quoted as production detection performance.",
+  "model_config": {
+    "class_name": "RandomForestClassifier",
+    "max_depth": 6,
+    "min_samples_split": 2,
+    "n_estimators": 100,
+    "random_state": 42
+  },
+  "model_version": "v_20261029172307_f9a8",
+  "n_features_in": 5,
+  "random_seed": 42,
+  "registry_version": "1.0",
+  "samples": {
+    "test": 22,
+    "total": 87,
+    "training": 65
+  },
+  "sklearn_version": "1.9.1",
+  "task_name": "port_scan",
+  "training_data_version": "sha256:59a3b66486b23e96",
+  "written_at": "2026-10-29T17:23:07.648273+00:00"
+}

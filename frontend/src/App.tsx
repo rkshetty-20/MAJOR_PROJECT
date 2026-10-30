@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Menu, X, Shield } from 'lucide-react';
 import api from './api';
+import { API_DISPLAY_URL } from './apiBase';
 import { OverviewMetrics } from './components/SecurityOverview';
 import { SimulationResult } from './components/AttackSimulation';
 import { RiskData, DetectionItem } from './components/DetectionRiskOverview';
@@ -100,7 +101,7 @@ function AppShell() {
     setActivePage('copilot');
   };
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const apiUrl = API_DISPLAY_URL;
 
   const renderContent = () => {
     switch (activePage) {

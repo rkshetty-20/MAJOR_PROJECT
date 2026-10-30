@@ -66,3 +66,8 @@ scratch_*.py
 update_tests.py
 test_system.db
 powershell.exe
+
+# Transient tool output and deployment verification screenshots
+frontend/_t.txt
+frontend/_tsc.txt
+_dashboard_*.png
