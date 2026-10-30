@@ -392,15 +392,9 @@ Potential future work includes:
 - Automated response and incident playbooks.
 - Production-grade observability and monitoring.
 
----
+--
 
-## 16. Screenshots
-
-*(Screenshots placeholder - To be added based on deployed UI assets)*
-
----
-
-## 17. License / Academic Notice
+## 16. License / Academic Notice
 
 This simulator generates synthetic telemetry primarily for educational and security research purposes.
 
